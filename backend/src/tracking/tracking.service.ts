@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizeBatchNo } from '../common/batch.util';
 import type { BatchStatus } from '../common/status';
@@ -55,6 +55,9 @@ export class TrackingService {
   }
 
   async addParcel(tgUserId: number, batchId: string, dto: AddParcelDto) {
+    if (!dto.trackCode && !dto.name) {
+      throw new BadRequestException('Provide a track code or a name');
+    }
     const userId = await this.userId(tgUserId);
     const batch = await this.prisma.userBatch.findFirst({ where: { id: batchId, userId } });
     if (!batch) throw new NotFoundException('Batch not found');

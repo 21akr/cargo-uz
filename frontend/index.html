@@ -298,6 +298,22 @@
   }
   .track-hint b{color:var(--ink);font-weight:600}
 
+  /* validation + status messages */
+  .nb-err,.parcel-err{
+    color:var(--red);font-size:11.5px;line-height:1.4;min-height:0;
+  }
+  .nb-err:not(:empty){margin-top:7px}
+  .parcel-err:not(:empty){margin-top:7px}
+  .auto-note{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--mut);
+    letter-spacing:.04em;
+  }
+  .track-error{
+    background:var(--bg-warn);color:var(--fg-warn);
+    border:1px solid var(--gold);border-radius:8px;
+    padding:9px 12px;font-size:12.5px;margin:12px 0;line-height:1.45;
+  }
+
   /* ── footnotes / table ─────────────────────────────── */
   details{
     margin-top:26px;border:1px solid var(--line);border-radius:var(--radius);
@@ -370,7 +386,7 @@
       <div class="field">
         <label class="lbl" for="w">Вес посылки</label>
         <div class="weight-row">
-          <input type="number" id="w" value="3" min="0.1" step="0.1" inputmode="decimal">
+          <input type="number" id="w" value="1" min="0.1" step="0.1" inputmode="decimal">
           <span class="kg">кг</span>
         </div>
         <div class="quick">
@@ -411,7 +427,7 @@
         <p><b>WIN:</b> цена за брендовые товары не отличается от обычных (подтверждено). Доставка по Ташкенту: до 5 кг — 25 000 сум, свыше 5 кг — бесплатно.</p>
         <p><b>COMFORT:</b> срок авиа считается от прибытия товара на склад в Китае, путь до склада не входит. Авто — только от 10 кг, цена по запросу.</p>
         <p><b>MEEST (авто-эконом 6&nbsp;$):</b> таможенный лимит 200&nbsp;$, не более 2 одинаковых товаров в посылке.</p>
-        <p><b>CHIN:</b> тариф на брендовые товары уточняется. Срок авто — со дня отправки.</p>
+        <p><b>CHIN:</b> тариф на брендовые товары уточняется. Срок авто — 12–18 дней со дня отправки.</p>
         <p><b>TUJJOR:</b> авто-почта — мелкие заказы, авто-карго — габаритные. Срок авто — от 10 до 15 дней, очень редко 20 дней от прибытия на склад.</p>
         <p>Сроки всех компаний считаются после прибытия товара на их склад. Для авто-доставки отдельных брендовых тарифов компании не публикуют — расчёт по обычной ставке.</p>
       </div>
@@ -442,16 +458,18 @@
         <label class="lbl">Новая партия (рейс / батч)</label>
         <div class="track-add">
           <select id="nb-carrier" aria-label="Карго-компания"></select>
-          <input id="nb-batch" placeholder="напр. 215-AVIA" aria-label="Номер партии">
+          <input id="nb-batch" placeholder="напр. 215-AVIA" aria-label="Номер партии" maxlength="32">
           <button type="button" id="nb-add" class="btn-primary">Добавить</button>
         </div>
+        <div class="nb-err" id="nb-err" aria-live="polite"></div>
       </div>
     </section>
 
+    <div class="track-error" id="track-error" role="alert" hidden></div>
     <div class="track-summary" id="track-summary"></div>
     <div id="batches"></div>
 
-    <p class="track-hint">
+    <p class="track-hint" id="track-hint">
       Статус пока ставится вручную. В версии 2 он будет <b>обновляться сам</b> —
       бот прочитает объявления карго-каналов и подтянет статус вашего рейса.
     </p>
@@ -535,8 +553,8 @@
         badges:()=>[]
       },
       auto:[
-        {v:'почта', days:[15,20], daysLabel:'до 20 дн', rate:()=>5.49, note:'Для мелких заказов · срок от прибытия на склад'},
-        {v:'карго', days:[15,20], daysLabel:'до 20 дн', rate:()=>6, note:'Для габаритных товаров · срок от прибытия на склад'}
+        {v:'почта', days:[10,15], daysLabel:'10–15 дн', rate:()=>5.49, note:'Для мелких заказов · обычно 10–15 дн, в ~10% случаев до 20 · срок от прибытия на склад'},
+        {v:'карго', days:[10,15], daysLabel:'10–15 дн', rate:()=>6, note:'Для габаритных товаров · обычно 10–15 дн, в ~10% случаев до 20 · срок от прибытия на склад'}
       ]
     },
     {
@@ -547,12 +565,12 @@
         note:(w,br)=> br ? 'Тариф на брендовые товары уточняется' : null,
         badges:()=>[]
       },
-      auto:[{v:'', days:[12,15], rate:()=>5.5, note:'Срок — со дня отправки'}]
+      auto:[{v:'', days:[12,18], daysLabel:'12–18 дн', rate:()=>5.5, note:'Срок — со дня отправки'}]
     }
   ];
 
   // ── state ────────────────────────────────────────────
-  let weight = 3, brand = false, mode = 'air';
+  let weight = 1, brand = false, mode = 'air';
 
   const $ = s => document.querySelector(s);
   const list = $('#list');
@@ -689,18 +707,29 @@
 })();
 
 /* ════════════════ ТРЕКИНГ (МОИ ПОСЫЛКИ) ════════════════
-   Модель повторяет будущую схему БД (v2):
+   Модель повторяет схему БД (v2):
      батч  = user_batch(carrier, batchNo, status)   ← общий статус рейса
      трек  = parcel(trackCode, name, cost)          ← личный список внутри батча
-   Пока всё в localStorage, статус ставится вручную. В v2 таблицу
-   batch_status будет заполнять MTProto-воркер, читающий карго-каналы. */
+
+   Хранилище выбирается само:
+     • window.CARGO_API_BASE задан → бэкенд v2 (статус приходит с сервера, read-only)
+     • иначе                       → localStorage v1 (статус ставится вручную)
+   Любой пользовательский текст экранируется esc() перед вставкой в DOM
+   (защита от HTML-инъекций); на входе — validateBatchNo / validateParcel. */
 (function(){
   const KEY = 'cargo_parcels_v1';
+  // Backend URL: from window.CARGO_API_BASE or localStorage['cargo_api_base'].
+  // Empty → offline localStorage mode (v1). Set it → API mode (v2).
+  const API_BASE = (window.CARGO_API_BASE
+    || (function(){ try { return localStorage.getItem('cargo_api_base'); } catch(e){ return ''; } })()
+    || '').replace(/\/+$/,'');
+  const initData = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || '';
+
   const CARRIERS = (window.__CARGO_CARRIERS && window.__CARGO_CARRIERS.length)
     ? window.__CARGO_CARRIERS
     : ['TUJJOR','MEEST','COMFORT','WIN','CHIN'];
 
-  // Статусы = будущий enum для авто-парсинга каналов
+  // Статусы = enum авто-парсинга каналов (в v2 приходят с сервера)
   const STATUSES = [
     { id:'awaiting',  label:'Ожидает сортировки',        cls:'b-mut'   },
     { id:'sorting',   label:'На сортировке',             cls:'b-warn'  },
@@ -712,18 +741,7 @@
   const statusMap = {};
   STATUSES.forEach(s=> statusMap[s.id]=s);
 
-  function load(){
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return { batches:[] };
-      const d = JSON.parse(raw);
-      return (d && Array.isArray(d.batches)) ? d : { batches:[] };
-    } catch(e){ return { batches:[] }; }
-  }
-  function save(){ try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} }
-
-  let data = load();
-
+  // ── helpers ──────────────────────────────────────────
   const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   function fmt(n){ return n.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1'); }
   function esc(s){
@@ -731,16 +749,137 @@
       {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
     ));
   }
+  // "215 avia" / "215-avia" → "215-AVIA" (тот же формат, что и на бэкенде)
+  function normBatch(input){
+    const m = String(input).match(/(\d{1,4})\s*[-–—]?\s*(avia|avto)/i);
+    return m ? m[1] + '-' + m[2].toUpperCase() : String(input).trim().toUpperCase();
+  }
 
-  // fill carrier dropdown
+  // ── валидация входных данных ──────────────────────────
+  function validateBatchNo(s){
+    s = String(s||'').trim();
+    if (!s) return 'Введите номер партии';
+    if (s.length > 32) return 'Слишком длинный номер (до 32)';
+    if (!/\d/.test(s)) return 'Номер должен содержать цифры';
+    if (/[<>&"']/.test(s)) return 'Недопустимые символы';
+    return null;
+  }
+  function validateParcel(raw){
+    const trackCode = String(raw.trackCode||'').trim();
+    const name      = String(raw.name||'').trim();
+    const costRaw   = String(raw.cost||'').trim();
+
+    if (!trackCode && !name) return { error:'Укажите трек-код или название' };
+    if (trackCode){
+      if (trackCode.length < 3 || trackCode.length > 40) return { error:'Трек-код: 3–40 символов' };
+      if (!/^[A-Za-z0-9][A-Za-z0-9\-_/]*$/.test(trackCode)) return { error:'Трек-код: буквы, цифры, - _ /' };
+    }
+    if (name.length > 60) return { error:'Название: до 60 символов' };
+
+    let cost = null;
+    if (costRaw){
+      const n = Number(costRaw.replace(',', '.'));
+      if (!isFinite(n) || n < 0) return { error:'Цена: число ≥ 0' };
+      if (n > 1000000)           return { error:'Цена слишком большая' };
+      cost = Math.round(n*100)/100;
+    }
+    return { value:{ trackCode: trackCode||null, name: name||null, cost } };
+  }
+
+  // ── хранилища за одним интерфейсом ────────────────────
+  function loadLocal(){
+    try {
+      const raw = localStorage.getItem(KEY);
+      const d = raw ? JSON.parse(raw) : null;
+      return (d && Array.isArray(d.batches)) ? d : { batches:[] };
+    } catch(e){ return { batches:[] }; }
+  }
+  function saveLocal(d){ try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(e){} }
+
+  const LocalStore = {
+    mode:'local', canSetStatus:true,
+    async list(){ return loadLocal().batches; },
+    async addBatch(carrier, batchNo){
+      const d = loadLocal(), no = normBatch(batchNo);
+      const existing = d.batches.find(b=> b.carrier===carrier && b.batchNo===no);
+      if (existing) return existing;
+      const batch = { id:uid('b_'), carrier, batchNo:no, status:'awaiting', statusUpdatedAt:Date.now(), parcels:[] };
+      d.batches.unshift(batch); saveLocal(d); return batch;
+    },
+    async deleteBatch(id){ const d=loadLocal(); d.batches = d.batches.filter(b=>b.id!==id); saveLocal(d); },
+    async addParcel(batchId, p){
+      const d=loadLocal(), b=d.batches.find(x=>x.id===batchId);
+      if (!b) throw new Error('Партия не найдена');
+      const parcel = { id:uid('p_'), trackCode:p.trackCode, name:p.name, cost:p.cost };
+      b.parcels.push(parcel); saveLocal(d); return parcel;
+    },
+    async deleteParcel(parcelId){
+      const d=loadLocal();
+      for (const b of d.batches) b.parcels = b.parcels.filter(p=>p.id!==parcelId);
+      saveLocal(d);
+    },
+    async setStatus(batchId, status){
+      const d=loadLocal(), b=d.batches.find(x=>x.id===batchId);
+      if (b){ b.status=status; b.statusUpdatedAt=Date.now(); saveLocal(d); }
+    }
+  };
+
+  const ApiStore = {
+    mode:'api', canSetStatus:false,        // статус ставит воркер, вручную нельзя
+    async _fetch(path, opts){
+      opts = opts || {};
+      const res = await fetch(API_BASE + path, {
+        method: opts.method || 'GET',
+        headers: { 'Content-Type':'application/json', 'Authorization':'tma ' + initData },
+        body: opts.body ? JSON.stringify(opts.body) : undefined
+      });
+      if (!res.ok){ const e = new Error('API ' + res.status); e.status = res.status; throw e; }
+      return res.status === 204 ? null : res.json();
+    },
+    list(){ return this._fetch('/tracking/batches'); },
+    addBatch(carrier, batchNo){ return this._fetch('/tracking/batches', { method:'POST', body:{ carrier, batchNo } }); },
+    deleteBatch(id){ return this._fetch('/tracking/batches/' + encodeURIComponent(id), { method:'DELETE' }); },
+    addParcel(batchId, p){ return this._fetch('/tracking/batches/' + encodeURIComponent(batchId) + '/parcels', { method:'POST', body:p }); },
+    deleteParcel(id){ return this._fetch('/tracking/parcels/' + encodeURIComponent(id), { method:'DELETE' }); }
+  };
+
+  const store = API_BASE ? ApiStore : LocalStore;
+
+  // ── DOM refs ─────────────────────────────────────────
   const carrierSel = document.getElementById('nb-carrier');
   carrierSel.innerHTML = CARRIERS.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+  const box        = document.getElementById('batches');
+  const summary    = document.getElementById('track-summary');
+  const batchInput = document.getElementById('nb-batch');
+  const nbErr      = document.getElementById('nb-err');
+  const errBanner  = document.getElementById('track-error');
+  const hint       = document.getElementById('track-hint');
 
-  const box = document.getElementById('batches');
-  const summary = document.getElementById('track-summary');
+  if (store.mode === 'api' && hint){
+    hint.innerHTML = 'Статус партий <b>обновляется автоматически</b> из карго-каналов.';
+  }
 
+  let batches = [];
+
+  function showError(msg){
+    if (!errBanner) return;
+    errBanner.textContent = msg || '';
+    errBanner.hidden = !msg;
+  }
+  function friendly(err){
+    if (err && err.status === 401) return 'Откройте приложение внутри Telegram, чтобы синхронизировать посылки.';
+    if (err && err.status)         return 'Ошибка сервера (' + err.status + '). Попробуйте позже.';
+    return 'Нет связи с сервером. Проверьте интернет.';
+  }
+  async function refresh(){ batches = await store.list(); render(); }
+  async function guard(action){
+    try { showError(''); await action(); await refresh(); }
+    catch(err){ showError(friendly(err)); }
+  }
+
+  // ── отрисовка (весь пользовательский текст — через esc()) ──
   function render(){
-    if (!data.batches.length){
+    if (!batches.length){
       box.innerHTML = '<div class="track-empty">Пока нет посылок.<br>'
         + 'Добавь партию сверху — например, <b>WIN · 215-AVIA</b> — и внеси свои трек-коды.</div>';
       summary.innerHTML = '';
@@ -749,103 +888,100 @@
 
     let totalParcels = 0, totalCost = 0, costShown = false;
 
-    box.innerHTML = data.batches.map(b=>{
+    box.innerHTML = batches.map(b=>{
       const st = statusMap[b.status] || STATUSES[0];
       totalParcels += b.parcels.length;
 
       const rows = b.parcels.map(p=>{
-        const c = parseFloat(p.cost);
-        const hasCost = !isNaN(c);
+        const c = p.cost==null ? NaN : Number(p.cost);
+        const hasCost = isFinite(c);
         if (hasCost){ totalCost += c; costShown = true; }
         return '<div class="prow">'
           + '<span class="track">'+esc(p.trackCode || '—')+'</span>'
           + '<span class="pname">'+esc(p.name || '—')+'</span>'
           + (hasCost ? '<span class="pcost">$'+fmt(c)+'</span>' : '')
-          + '<button class="x" data-del-parcel="'+b.id+':'+p.id+'" aria-label="Удалить трек">✕</button>'
+          + '<button class="x" data-del-parcel="'+esc(p.id)+'" aria-label="Удалить трек">✕</button>'
           + '</div>';
       }).join('');
 
-      const opts = STATUSES.map(s=>
-        '<option value="'+s.id+'"'+(s.id===b.status?' selected':'')+'>'+s.label+'</option>'
-      ).join('');
+      // статус: редактируемый (local) или badge + пометка (api)
+      const statusControl = store.canSetStatus
+        ? '<select data-status="'+esc(b.id)+'" aria-label="Статус партии">'
+            + STATUSES.map(s=>'<option value="'+s.id+'"'+(s.id===b.status?' selected':'')+'>'+s.label+'</option>').join('')
+          + '</select>'
+        : '<span class="auto-note">обновляется автоматически</span>';
 
       return '<article class="card batch">'
         + '<div class="top">'
         +   '<div class="co">'+esc(b.carrier)+' <span class="variant">'+esc(b.batchNo)+'</span></div>'
-        +   '<button class="x" data-del-batch="'+b.id+'" aria-label="Удалить партию">Удалить ✕</button>'
+        +   '<button class="x" data-del-batch="'+esc(b.id)+'" aria-label="Удалить партию">Удалить ✕</button>'
         + '</div>'
         + '<div class="batch-status">'
         +   '<span class="badge '+st.cls+'">'+st.label+'</span>'
-        +   '<select data-status="'+b.id+'" aria-label="Статус партии">'+opts+'</select>'
+        +   statusControl
         + '</div>'
         + (rows ? '<div class="parcels">'+rows+'</div>' : '')
         + '<div class="parcel-add">'
-        +   '<input class="track" data-f="track" placeholder="Трек-код" aria-label="Трек-код">'
-        +   '<input class="name" data-f="name" placeholder="Товар" aria-label="Название товара">'
-        +   '<input class="cost" data-f="cost" inputmode="decimal" placeholder="$" aria-label="Цена">'
-        +   '<button data-add-parcel="'+b.id+'" aria-label="Добавить трек-код">+</button>'
+        +   '<input class="track" data-f="track" maxlength="40" placeholder="Трек-код" aria-label="Трек-код">'
+        +   '<input class="name" data-f="name" maxlength="60" placeholder="Товар" aria-label="Название товара">'
+        +   '<input class="cost" data-f="cost" maxlength="12" inputmode="decimal" placeholder="$" aria-label="Цена">'
+        +   '<button data-add-parcel="'+esc(b.id)+'" aria-label="Добавить трек-код">+</button>'
         + '</div>'
+        + '<div class="parcel-err" data-err="'+esc(b.id)+'" aria-live="polite"></div>'
         + '</article>';
     }).join('');
 
-    summary.innerHTML = '<span>партий: <b>'+data.batches.length+'</b></span>'
+    summary.innerHTML = '<span>партий: <b>'+batches.length+'</b></span>'
       + '<span>трек-кодов: <b>'+totalParcels+'</b></span>'
       + (costShown ? '<span>сумма: <b>$'+fmt(totalCost)+'</b></span>' : '');
   }
 
-  // add batch
-  const batchInput = document.getElementById('nb-batch');
+  // ── события ───────────────────────────────────────────
   function addBatch(){
+    const err = validateBatchNo(batchInput.value);
+    if (err){ nbErr.textContent = err; return; }
+    nbErr.textContent = '';
     const carrier = carrierSel.value;
     const batchNo = batchInput.value.trim();
-    if (!batchNo) return;
-    data.batches.unshift({
-      id: uid('b_'), carrier, batchNo,
-      status: 'awaiting', updatedAt: Date.now(), parcels: []
-    });
     batchInput.value = '';
-    save(); render();
+    guard(()=> store.addBatch(carrier, batchNo));
   }
   document.getElementById('nb-add').addEventListener('click', addBatch);
   batchInput.addEventListener('keydown', e=>{ if (e.key==='Enter') addBatch(); });
+  batchInput.addEventListener('input', ()=>{ if (nbErr.textContent) nbErr.textContent = ''; });
 
-  // delegated actions on the batch list
   box.addEventListener('click', e=>{
     const delB = e.target.closest('[data-del-batch]');
-    if (delB){
-      data.batches = data.batches.filter(b=>b.id!==delB.dataset.delBatch);
-      save(); render(); return;
-    }
+    if (delB){ guard(()=> store.deleteBatch(delB.dataset.delBatch)); return; }
+
     const delP = e.target.closest('[data-del-parcel]');
-    if (delP){
-      const [bid,pid] = delP.dataset.delParcel.split(':');
-      const b = data.batches.find(x=>x.id===bid);
-      if (b){ b.parcels = b.parcels.filter(p=>p.id!==pid); save(); render(); }
-      return;
-    }
+    if (delP){ guard(()=> store.deleteParcel(delP.dataset.delParcel)); return; }
+
     const addP = e.target.closest('[data-add-parcel]');
     if (addP){
-      const wrap = addP.closest('.parcel-add');
-      const track = wrap.querySelector('[data-f="track"]').value.trim();
-      const name  = wrap.querySelector('[data-f="name"]').value.trim();
-      const cost  = wrap.querySelector('[data-f="cost"]').value.trim();
-      if (!track && !name) return;
-      const b = data.batches.find(x=>x.id===addP.dataset.addParcel);
-      if (b){ b.parcels.push({ id:uid('p_'), trackCode:track, name, cost }); save(); render(); }
-      return;
+      const article = addP.closest('.batch');
+      const wrap    = addP.closest('.parcel-add');
+      const errSlot = article.querySelector('[data-err]');
+      const v = validateParcel({
+        trackCode: wrap.querySelector('[data-f="track"]').value,
+        name:      wrap.querySelector('[data-f="name"]').value,
+        cost:      wrap.querySelector('[data-f="cost"]').value
+      });
+      if (v.error){ errSlot.textContent = v.error; return; }
+      errSlot.textContent = '';
+      guard(()=> store.addParcel(addP.dataset.addParcel, v.value));
     }
   });
 
-  // status change
   box.addEventListener('change', e=>{
     const sel = e.target.closest('[data-status]');
-    if (sel){
-      const b = data.batches.find(x=>x.id===sel.dataset.status);
-      if (b){ b.status = sel.value; b.updatedAt = Date.now(); save(); render(); }
+    if (sel && store.canSetStatus){
+      guard(()=> store.setStatus(sel.dataset.status, sel.value));
     }
   });
 
-  render();
+  // первичная загрузка
+  (async()=>{ try { await refresh(); } catch(err){ showError(friendly(err)); render(); } })();
 })();
 </script>
 </body>
