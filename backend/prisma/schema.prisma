@@ -1,0 +1,77 @@
+// Data model for cargo-uz v2.
+// Key idea: batch STATUS is shared across all users of a batch (written only by
+// the ingest worker); the PARCEL list under a batch is private per user.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Transport {
+  avia
+  avto
+}
+
+enum BatchStatus {
+  awaiting // Ожидает сортировки
+  sorting // На сортировке
+  airport // Отправлен в аэропорт (avia)
+  transit // В пути
+  arrived // На складе в Узбекистане
+  delivered // Выдан / получен
+}
+
+/// Global batch status, keyed by (carrier, batchNo). Written ONLY by ingest.
+model BatchStatusRecord {
+  carrier     String
+  batchNo     String      @map("batch_no")
+  transport   Transport
+  status      BatchStatus
+  rawText     String?     @map("raw_text")
+  sourceMsgId String?     @map("source_msg_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@id([carrier, batchNo])
+  @@map("batch_status")
+}
+
+model User {
+  id        String      @id @default(cuid())
+  tgUserId  BigInt      @unique @map("tg_user_id")
+  createdAt DateTime    @default(now()) @map("created_at")
+  batches   UserBatch[]
+
+  @@map("app_user")
+}
+
+/// A user watching a specific batch. Status is looked up from BatchStatusRecord.
+model UserBatch {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  carrier   String
+  batchNo   String   @map("batch_no")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parcels   Parcel[]
+
+  @@unique([userId, carrier, batchNo])
+  @@index([carrier, batchNo]) // supports notify's reverse lookup
+  @@map("user_batch")
+}
+
+model Parcel {
+  id          String    @id @default(cuid())
+  userBatchId String    @map("user_batch_id")
+  trackCode   String?   @map("track_code")
+  name        String?
+  cost        Decimal?  @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  userBatch   UserBatch @relation(fields: [userBatchId], references: [id], onDelete: Cascade)
+
+  @@map("parcel")
+}

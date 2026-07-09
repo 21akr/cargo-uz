@@ -1,41 +1,83 @@
-# backend/ — v2 (not built yet)
+# backend/ — NestJS API + MTProto ingest (v2)
 
-Placeholder for the NestJS backend. Nothing here runs yet; it exists so the
-monorepo shape is fixed and the frontend can later point at a real API.
+Single NestJS app, three modules, meant to run on **one always-on host** (Oracle
+free VM / Fly.io / small VPS — **not Vercel**; serverless can't hold a live
+Telegram session). Boots API-only if no MTProto creds are present.
 
-## Planned shape
+## Modules
 
-A **single NestJS app** running on one always-on host (Oracle free VM / Fly.io /
-cheap VPS — **not Vercel**, which is serverless and can't hold a live Telegram
-session). Three modules:
+| Module     | Job |
+|------------|-----|
+| `ingest`   | GramJS **MTProto** client reads carrier channels → `BatchPostParser` (regex, tested) turns each post into `{batchNo, status}` → upserts `batch_status`, emits `batch.status.changed` on change. |
+| `tracking` | HTTP API for the Mini App. Guarded by `TelegramAuthGuard` (validates Mini App `initData` via HMAC with the bot token). |
+| `notify`   | Listens for `batch.status.changed`, finds every user watching that `(carrier, batchNo)`, pushes a bot message. |
 
-| Module        | Job |
-|---------------|-----|
-| `ingest`      | GramJS **MTProto** client. Logs in as a dedicated Telegram *user* account, reads the 5 carrier channels in real time, parses each post (regex + LLM fallback) into `{carrier, batchNo, transport, status}`. |
-| `tracking`    | HTTP API the Mini App calls: register batches, add/remove parcels, read status. |
-| `notify`      | On a `batch_status` change, find every user watching that `(carrier, batchNo)` and push a Telegram bot message. |
+`ingest → notify` is decoupled through Nest's `EventEmitter`, so the parser has no
+idea who's subscribed.
 
-## Data model (Prisma / Postgres)
+## Layout
 
 ```
-batch_status(carrier, batch_no, status, raw_text, updated_at)   -- PK (carrier, batch_no); written ONLY by ingest
-user(id, tg_user_id)
-user_batch(id, user_id, carrier, batch_no)                       -- a user watching a batch
-parcel(id, user_batch_id, track_code, name, cost)                -- their trackcodes+names inside it
+src/
+├── main.ts, app.module.ts
+├── config/configuration.ts        # env → typed AppConfig (parses INGEST_CHANNELS)
+├── prisma/                         # PrismaService (boots even if DB is down)
+├── common/                         # status vocab, batch-no normalizer, TG auth guard/util, health
+├── tracking/                       # controller + service + DTOs
+├── ingest/
+│   ├── parser/batch-post.parser.ts # the interesting bit
+│   ├── parser/batch-post.parser.spec.ts
+│   ├── ingest.service.ts           # MTProto lifecycle + upsert/emit
+│   └── ingest.controller.ts        # POST /ingest/simulate (dev)
+└── notify/                         # OnEvent listener + Bot API sender
+prisma/schema.prisma                # BatchStatusRecord + User + UserBatch + Parcel
 ```
 
-The split matters: **status is shared** across all users of a batch; the
-**parcel list is private** per user. The frontend already models it this way in
-`localStorage`, so migration is a straight swap of storage for API calls.
+## HTTP surface
 
-## Why MTProto and not the Bot API
+- `GET  /health`
+- `POST /tracking/batches`            `{ carrier, batchNo }` — register/watch a batch
+- `GET  /tracking/batches`            list my batches with merged status + parcels
+- `DELETE /tracking/batches/:id`
+- `POST /tracking/batches/:id/parcels` `{ trackCode?, name?, cost? }`
+- `DELETE /tracking/parcels/:id`
+- `POST /ingest/simulate`            `{ carrier, text }` — **dev only**: run the full
+  parse→upsert→notify pipeline on a pasted channel post, no MTProto needed.
 
-The Bot API can only read chats the bot is a member/admin of — you can't add your
-bot to WIN's channel. A user-account MTProto session can read any public channel.
-Keep that session string in a secret manager; it's full account access.
+Tracking routes need `Authorization: tma <initData>` from the Mini App. For local
+dev, set `DEV_TG_USER_ID` to bypass and act as a fixed user.
 
-## Free infra targets
+## Run
 
-- **App/worker:** Oracle Cloud free VM (permanent) / Fly.io / small VPS.
-- **DB:** Neon or Supabase (free Postgres).
-- **Redis** (only if BullMQ queue is added): Upstash free tier.
+```bash
+cp .env.example .env         # fill DATABASE_URL at minimum
+npm install
+npm run prisma:generate
+npm run prisma:migrate       # creates tables (needs a reachable Postgres)
+npm run start:dev            # http://localhost:3000
+npm test                     # parser unit tests (no DB/creds needed)
+```
+
+The app boots without a DB (logs a warning; DB-backed calls then fail) and without
+MTProto creds (ingest stays disabled) — so you can bring pieces up incrementally.
+
+## Enabling MTProto ingest
+
+1. Create an app at https://my.telegram.org → `TG_API_ID`, `TG_API_HASH`.
+2. Log in **a dedicated user account** once to mint a `StringSession`; put it in
+   `TG_SESSION`. **That string is full account access — keep it secret** (it's
+   gitignored via `*.session` / `.env`).
+3. Set `INGEST_CHANNELS=WIN=@win_channel,MEEST=@...` (carrier=channel pairs).
+4. Restart — you'll see `Listening: WIN -> @win_channel` per channel.
+
+## Deploy split
+
+`frontend/` → Vercel (static). This backend → an always-on box. DB → Neon/Supabase
+(free Postgres). Redis (only if a BullMQ queue is added later) → Upstash.
+
+## Not built yet (later)
+
+- LLM fallback for posts the regex parser returns `null` for (Anthropic; wire into
+  `BatchPostParser` / a new `LlmParser`).
+- Telegraf bot for users who prefer registering batches in-chat instead of the Mini App.
+- Frontend migration: swap the tracker's `localStorage` for these endpoints.
