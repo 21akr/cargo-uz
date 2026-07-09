@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Карго-калькулятор · Китай → Узбекистан</title>
+<meta name="description" content="Сравнение тарифов карго-компаний Китай → Узбекистан: WIN, MEEST, COMFORT, TUJJOR, CHIN. Калькулятор стоимости доставки и трекинг посылок.">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBFBF8;
+    --card:#FFFFFF;
+    --ink:#16233F;
+    --mut:#6B7280;
+    --line:#E5E4DD;
+    --blue:#2547A8;
+    --red:#CE4438;
+    --gold:#B98A1E;
+    --green:#1F7A4D;
+    --input:#FBFBF8;
+    --bg-green:#E5F3EC; --fg-green:#1F7A4D;
+    --bg-blue:#E8EDFA;  --fg-blue:#2547A8;
+    --bg-warn:#FBF3E0;  --fg-warn:#B98A1E;
+    --radius:12px;
+  }
+  [data-theme="dark"]{
+    --paper:#0F1626;
+    --card:#171F31;
+    --ink:#E7ECF5;
+    --mut:#93A0B8;
+    --line:#28324A;
+    --blue:#6E93F0;
+    --red:#E5675A;
+    --gold:#D8AE4E;
+    --green:#54C08A;
+    --input:#111827;
+    --bg-green:#12301F; --fg-green:#54C08A;
+    --bg-blue:#182448;  --fg-blue:#8FA9F5;
+    --bg-warn:#332918;  --fg-warn:#D8AE4E;
+  }
+  html{color-scheme:light dark}
+  body,.card,.calc,details,input,.seg,.seg button,.flightpath,.tab,select{transition:background-color .25s ease,border-color .25s ease,color .25s ease}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    min-height:100vh;
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:0 14px 48px}
+
+  /* ── flight path strip (signature) ─────────────────── */
+  .flightpath{
+    position:relative;
+    height:32px;
+    display:flex;align-items:center;gap:0;
+    padding:0 18px;
+    overflow:hidden;
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+  }
+  .flightpath .dashline{
+    flex:1;height:0;
+    border-top:2px dashed var(--blue);
+    opacity:.45;
+  }
+  .flightpath .dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .flightpath .dot.cn{background:var(--blue)}
+  .flightpath .dot.uz{background:var(--red)}
+  .flightpath .plane{
+    position:absolute;top:50%;left:14px;
+    transform:translateY(-50%);
+    color:var(--blue);
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .flightpath .plane{animation:fly 7s linear infinite}
+    @keyframes fly{
+      0%{left:12px;opacity:0}
+      7%{opacity:1}
+      90%{opacity:1}
+      100%{left:calc(100% - 28px);opacity:0}
+    }
+  }
+
+  header{padding:22px 2px 16px}
+  .route{
+    display:flex;align-items:center;gap:8px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px;font-weight:600;letter-spacing:.14em;
+    color:var(--blue);text-transform:uppercase;
+  }
+  .route .dash{flex:0 0 26px;border-top:1.5px dashed var(--blue);position:relative;top:1px}
+  #theme{
+    margin-left:auto;border:1px solid var(--line);background:var(--card);
+    width:34px;height:34px;border-radius:999px;cursor:pointer;
+    font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  #theme:hover{border-color:var(--blue)}
+  #theme:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  h1{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;font-size:30px;line-height:1.12;
+    letter-spacing:.015em;text-transform:uppercase;
+    margin-top:8px;
+  }
+  .sub{color:var(--mut);font-size:13.5px;margin-top:6px}
+
+  /* ── tabs ──────────────────────────────────────────── */
+  .tabs{display:flex;gap:6px;margin:0 2px 16px}
+  .tab{
+    flex:1;border:1px solid var(--line);background:var(--card);color:var(--mut);
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:13.5px;text-transform:uppercase;
+    letter-spacing:.05em;padding:10px 8px;border-radius:8px;cursor:pointer;
+  }
+  .tab.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  [data-theme="dark"] .tab.on{color:#0F1626}
+  .tab:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+  /* ── calculator ────────────────────────────────────── */
+  .calc{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    box-shadow:0 1px 2px rgba(22,35,63,.05);
+  }
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  label.lbl{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10.5px;font-weight:600;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--mut);
+    margin-bottom:7px;
+  }
+  .weight-row{display:flex;align-items:center;gap:10px}
+  input[type=number]{
+    flex:1;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:22px;font-weight:600;color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;
+    padding:9px 12px;width:100%;
+    background:var(--input);
+  }
+  input[type=number]:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:transparent}
+  .kg{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--mut);font-size:15px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .quick{display:flex;gap:6px;margin-top:8px}
+  .quick button{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;
+    border:1px solid var(--line);background:var(--card);color:var(--mut);
+    border-radius:999px;padding:4px 11px;cursor:pointer;
+  }
+  .quick button:hover{border-color:var(--blue);color:var(--blue)}
+  .seg{
+    display:flex;width:100%;
+    border:1px solid var(--line);border-radius:8px;overflow:hidden;
+    background:var(--input);
+  }
+  .seg button{
+    flex:1;border:0;background:transparent;cursor:pointer;
+    font-family:'Inter',sans-serif;font-size:14px;font-weight:500;
+    color:var(--mut);padding:10px 6px;
+    transition:background .12s,color .12s;
+  }
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--blue);color:#fff;font-weight:600}
+  [data-theme="dark"] .seg button.on{color:#0F1626}
+  .seg button:focus-visible{outline:2px solid var(--blue);outline-offset:-3px}
+
+  /* ── results ───────────────────────────────────────── */
+  .results{margin-top:22px}
+  .res-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:10px;padding:0 2px;
+  }
+  .res-head h2{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:17px;
+    text-transform:uppercase;letter-spacing:.04em;
+  }
+  .res-head .mode-note{font-size:12px;color:var(--mut)}
+
+  .card{
+    position:relative;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 16px 13px 20px;
+    margin-bottom:10px;
+    overflow:hidden;
+  }
+  .card::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+    background:var(--line);
+  }
+  .card.best::before{background:var(--green)}
+  .card.fast::before{background:var(--blue)}
+  .card.best.fast::before{background:linear-gradient(180deg,var(--green) 50%,var(--blue) 50%)}
+  .card.na{opacity:.62}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .co{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:16.5px;
+    text-transform:uppercase;letter-spacing:.05em;
+  }
+  .variant{font-family:'Inter',sans-serif;font-size:12px;color:var(--mut);font-weight:500;text-transform:none;letter-spacing:0;margin-left:2px}
+  .price{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:21px;
+    text-align:right;white-space:nowrap;
+  }
+  .price .cur{font-size:13px;color:var(--mut);font-weight:500}
+  .meta{
+    display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mut);
+  }
+  .meta b{color:var(--ink);font-weight:600}
+  .badges{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+  .badge{
+    font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    padding:3px 8px;border-radius:4px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .b-green{background:var(--bg-green);color:var(--fg-green)}
+  .b-blue{background:var(--bg-blue);color:var(--fg-blue)}
+  .b-warn{background:var(--bg-warn);color:var(--fg-warn)}
+  .b-mut{background:var(--line);color:var(--mut)}
+  .note{font-size:12px;color:var(--mut);margin-top:8px;line-height:1.45}
+  .note.warn{color:var(--gold)}
+
+  /* ── tracker (мои посылки) ─────────────────────────── */
+  .track-add{display:flex;gap:8px;flex-wrap:wrap}
+  .track-add select,.track-add input{
+    font-family:'Inter',sans-serif;font-size:14px;color:var(--ink);
+    border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--input);
+  }
+  .track-add select{flex:0 0 auto}
+  .track-add input{flex:1;min-width:120px}
+  .track-add input:focus,.track-add select:focus,.parcel-add input:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:transparent}
+  .btn-primary{
+    border:0;background:var(--blue);color:#fff;font-weight:600;font-family:'Inter',sans-serif;
+    font-size:14px;border-radius:8px;padding:9px 16px;cursor:pointer;flex:0 0 auto;
+  }
+  [data-theme="dark"] .btn-primary{color:#0F1626}
+  .btn-primary:hover{filter:brightness(1.06)}
+
+  .track-summary{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mut);
+    margin:16px 2px 10px;display:flex;gap:16px;flex-wrap:wrap;
+  }
+  .track-summary b{color:var(--ink)}
+
+  .batch .batch-status{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap}
+  .batch .batch-status select{
+    font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--input);
+  }
+  .parcels{margin-top:12px}
+  .prow{
+    display:flex;align-items:center;gap:10px;padding:9px 0;
+    border-top:1px solid var(--line);font-size:13px;
+  }
+  .prow .track{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mut);white-space:nowrap}
+  .prow .pname{flex:1;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis}
+  .prow .pcost{font-family:'IBM Plex Mono',monospace;color:var(--ink);white-space:nowrap}
+  .prow .x,.batch .x{
+    border:0;background:transparent;color:var(--mut);cursor:pointer;font-size:13px;
+    padding:3px 7px;border-radius:6px;line-height:1;flex:0 0 auto;
+  }
+  .prow .x:hover,.batch .x:hover{color:var(--red);background:var(--bg-warn)}
+  .batch .x{margin-left:auto}
+
+  .parcel-add{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+  .parcel-add input{
+    font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:8px 9px;background:var(--input);
+  }
+  .parcel-add input.track{flex:2;min-width:110px}
+  .parcel-add input.name{flex:2;min-width:110px}
+  .parcel-add input.cost{flex:0 0 60px;width:60px;text-align:center}
+  .parcel-add button{
+    border:1px solid var(--line);background:var(--card);color:var(--blue);
+    font-size:18px;font-weight:600;border-radius:6px;padding:0 13px;cursor:pointer;flex:0 0 auto;
+  }
+  .parcel-add button:hover{border-color:var(--blue)}
+
+  .track-empty{
+    text-align:center;color:var(--mut);font-size:13px;line-height:1.6;
+    padding:28px 16px;border:1px dashed var(--line);border-radius:var(--radius);
+  }
+  .track-hint{
+    font-size:12px;color:var(--mut);margin:14px 2px 0;line-height:1.5;
+  }
+  .track-hint b{color:var(--ink);font-weight:600}
+
+  /* ── footnotes / table ─────────────────────────────── */
+  details{
+    margin-top:26px;border:1px solid var(--line);border-radius:var(--radius);
+    background:var(--card);
+  }
+  summary{
+    cursor:pointer;padding:13px 16px;
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:14.5px;
+    text-transform:uppercase;letter-spacing:.05em;
+    list-style:none;display:flex;justify-content:space-between;align-items:center;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"+";font-family:'IBM Plex Mono',monospace;font-size:17px;color:var(--mut)}
+  details[open] summary::after{content:"–"}
+  .det-body{padding:2px 16px 16px;font-size:13px;color:var(--ink)}
+  .det-body p{margin-bottom:9px;color:var(--mut)}
+  .det-body p b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  th,td{
+    text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  th{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--mut);
+  }
+  td:first-child{font-weight:600;white-space:nowrap}
+  td.num{font-family:'IBM Plex Mono',monospace}
+
+  footer{
+    margin-top:30px;text-align:center;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut);
+    letter-spacing:.04em;line-height:1.7;
+  }
+  @media (max-width:380px){
+    h1{font-size:26px}
+    .price{font-size:19px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .card{transition:transform .12s ease}
+  }
+</style>
+</head>
+<body>
+<div class="flightpath" aria-hidden="true">
+  <span class="dot cn"></span>
+  <span class="dashline"></span>
+  <span class="dot uz"></span>
+  <svg class="plane" viewBox="0 0 24 24" width="15" height="15"><path transform="rotate(90 12 12)" fill="currentColor" d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>
+</div>
+<div class="wrap">
+
+  <header>
+    <div class="route">
+      <span>CN&nbsp;·&nbsp;Китай</span><span class="dash"></span><span>✈</span><span class="dash"></span><span>UZ&nbsp;·&nbsp;Узбекистан</span>
+      <button type="button" id="theme" aria-label="Переключить тему">🌙</button>
+    </div>
+    <h1>Карго-калькулятор</h1>
+    <p class="sub">Сравнение тарифов пяти карго-компаний. Введи вес — увидишь, где дешевле и быстрее.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Разделы">
+    <button type="button" class="tab on" id="tab-calc" role="tab" aria-selected="true">Калькулятор</button>
+    <button type="button" class="tab" id="tab-track" role="tab" aria-selected="false">Мои посылки</button>
+  </nav>
+
+  <!-- ══════════ ВИД: КАЛЬКУЛЯТОР ══════════ -->
+  <div id="view-calc" role="tabpanel">
+    <section class="calc" aria-label="Калькулятор">
+      <div class="field">
+        <label class="lbl" for="w">Вес посылки</label>
+        <div class="weight-row">
+          <input type="number" id="w" value="3" min="0.1" step="0.1" inputmode="decimal">
+          <span class="kg">кг</span>
+        </div>
+        <div class="quick">
+          <button type="button" data-w="1">1 кг</button>
+          <button type="button" data-w="3">3 кг</button>
+          <button type="button" data-w="5">5 кг</button>
+          <button type="button" data-w="10">10 кг</button>
+          <button type="button" data-w="20">20 кг</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" id="lbl-type">Тип товара</label>
+        <div class="seg" role="group" aria-labelledby="lbl-type">
+          <button type="button" id="t-reg" class="on">Обычный</button>
+          <button type="button" id="t-brand">Брендовый</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" id="lbl-mode">Способ доставки</label>
+        <div class="seg" role="group" aria-labelledby="lbl-mode">
+          <button type="button" id="m-air" class="on">✈ Авиа</button>
+          <button type="button" id="m-auto">🚚 Авто</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="results" aria-live="polite">
+      <div class="res-head">
+        <h2>Результат</h2>
+        <span class="mode-note" id="mode-note"></span>
+      </div>
+      <div id="list"></div>
+    </section>
+
+    <details>
+      <summary>Примечания к тарифам</summary>
+      <div class="det-body">
+        <p><b>WIN:</b> цена за брендовые товары не отличается от обычных (подтверждено). Доставка по Ташкенту: до 5 кг — 25 000 сум, свыше 5 кг — бесплатно.</p>
+        <p><b>COMFORT:</b> срок авиа считается от прибытия товара на склад в Китае, путь до склада не входит. Авто — только от 10 кг, цена по запросу.</p>
+        <p><b>MEEST (авто-эконом 6&nbsp;$):</b> таможенный лимит 200&nbsp;$, не более 2 одинаковых товаров в посылке.</p>
+        <p><b>CHIN:</b> тариф на брендовые товары уточняется. Срок авто — со дня отправки.</p>
+        <p><b>TUJJOR:</b> авто-почта — мелкие заказы, авто-карго — габаритные. Срок авто — до 20 дней от прибытия на склад.</p>
+        <p>Сроки всех компаний считаются после прибытия товара на их склад. Для авто-доставки отдельных брендовых тарифов компании не публикуют — расчёт по обычной ставке.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Все тарифы · Авиа</summary>
+      <div class="det-body">
+        <table>
+          <thead><tr><th>Карго</th><th>Обычные</th><th>Бренд</th><th>Срок</th></tr></thead>
+          <tbody>
+            <tr><td>WIN</td><td class="num">9.5 → 8.8&nbsp;$</td><td class="num">= обычным</td><td class="num">5–7 дн</td></tr>
+            <tr><td>MEEST</td><td class="num">10&nbsp;$</td><td class="num">12&nbsp;$</td><td class="num">6–12 дн</td></tr>
+            <tr><td>COMFORT</td><td class="num">10 → 9&nbsp;$</td><td class="num">12 → 11&nbsp;$</td><td class="num">2–6 дн¹</td></tr>
+            <tr><td>TUJJOR</td><td class="num">9&nbsp;$</td><td class="num">11&nbsp;$</td><td class="num">4–7 дн</td></tr>
+            <tr><td>CHIN</td><td class="num">9.2&nbsp;$</td><td class="num">?</td><td class="num">3–5 дн</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:8px">Стрелка → показывает снижение ставки при росте веса. ¹ от прибытия на склад в Китае.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- ══════════ ВИД: МОИ ПОСЫЛКИ ══════════ -->
+  <div id="view-track" role="tabpanel" hidden>
+    <section class="calc" aria-label="Добавить партию">
+      <div class="field" style="margin-bottom:0">
+        <label class="lbl">Новая партия (рейс / батч)</label>
+        <div class="track-add">
+          <select id="nb-carrier" aria-label="Карго-компания"></select>
+          <input id="nb-batch" placeholder="напр. 215-AVIA" aria-label="Номер партии">
+          <button type="button" id="nb-add" class="btn-primary">Добавить</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="track-summary" id="track-summary"></div>
+    <div id="batches"></div>
+
+    <p class="track-hint">
+      Статус пока ставится вручную. В версии 2 он будет <b>обновляться сам</b> —
+      бот прочитает объявления карго-каналов и подтянет статус вашего рейса.
+    </p>
+  </div>
+
+  <footer>
+    Тарифы обновлены: июль 2026 · цены могут меняться —<br>уточняйте у карго перед отправкой
+  </footer>
+</div>
+
+<script>
+/* ════════════════ КАЛЬКУЛЯТОР + ТЕМА ════════════════ */
+(function(){
+  // Telegram Mini App
+  if (window.Telegram && Telegram.WebApp) {
+    try { Telegram.WebApp.ready(); Telegram.WebApp.expand(); } catch(e){}
+  }
+
+  // ── theme ────────────────────────────────────────────
+  const root = document.documentElement;
+  function saved(){ try { return localStorage.getItem('theme'); } catch(e){ return null; } }
+  function store(v){ try { localStorage.setItem('theme', v); } catch(e){} }
+  function apply(t){
+    root.setAttribute('data-theme', t);
+    document.getElementById('theme').textContent = t==='dark' ? '☀️' : '🌙';
+  }
+  const sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  apply(saved() || (sysDark ? 'dark' : 'light'));
+  document.getElementById('theme').addEventListener('click', ()=>{
+    const next = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+    apply(next); store(next);
+  });
+
+  // ── tariff data ──────────────────────────────────────
+  // air: rate(weight, brand) -> $/kg or null if unknown
+  const COMPANIES = [
+    {
+      id:'win', name:'WIN',
+      air:{
+        days:[5,7],
+        rate:(w,br)=> w<=10 ? 9.5 : (w<=30 ? 9.2 : 8.8), // brand = same
+        note:(w,br)=> w<=5
+          ? '+ 25 000 сум доставка по Ташкенту (свыше 5 кг — бесплатно)'
+          : 'Доставка по Узбекистану — бесплатно',
+        badges:(w,br)=> br ? [{t:'Бренд без наценки',c:'b-green'}] : []
+      },
+      auto:[{v:'', days:[15,18], rate:()=>7, note:null}]
+    },
+    {
+      id:'meest', name:'MEEST',
+      air:{
+        days:[6,12],
+        rate:(w,br)=> br ? 12 : 10,
+        note:()=> null,
+        badges:()=>[]
+      },
+      auto:[
+        {v:'стандарт', days:[18,20], rate:()=>9, note:'Без лимитов по количеству и сумме · заявлено: без задержек на таможне'},
+        {v:'эконом', days:[30,35], rate:()=>6, note:'Лимит 200 $ · не более 2 одинаковых товаров'}
+      ]
+    },
+    {
+      id:'comfort', name:'COMFORT',
+      air:{
+        days:[2,6],
+        rate:(w,br)=> br
+          ? (w<10 ? 12 : (w<50 ? 11.5 : 11))
+          : (w<=20 ? 10 : (w<=50 ? 9.5 : 9)),
+        note:()=> 'Срок — от прибытия товара на склад в Китае',
+        badges:()=>[]
+      },
+      auto:[{v:'', days:[10,18], rate:(w)=> w>=10 ? NaN : null, minW:10,
+             note:'Только от 10 кг · цена по запросу'}]
+    },
+    {
+      id:'tujjor', name:'TUJJOR',
+      air:{
+        days:[4,7],
+        rate:(w,br)=> br ? 11 : 9,
+        note:()=> null,
+        badges:()=>[]
+      },
+      auto:[
+        {v:'почта', days:[15,20], daysLabel:'до 20 дн', rate:()=>5.49, note:'Для мелких заказов · срок от прибытия на склад'},
+        {v:'карго', days:[15,20], daysLabel:'до 20 дн', rate:()=>6, note:'Для габаритных товаров · срок от прибытия на склад'}
+      ]
+    },
+    {
+      id:'chin', name:'CHIN',
+      air:{
+        days:[3,5],
+        rate:(w,br)=> br ? null : 9.2, // brand unknown
+        note:(w,br)=> br ? 'Тариф на брендовые товары уточняется' : null,
+        badges:()=>[]
+      },
+      auto:[{v:'', days:[12,15], rate:()=>5.5, note:'Срок — со дня отправки'}]
+    }
+  ];
+
+  // ── state ────────────────────────────────────────────
+  let weight = 3, brand = false, mode = 'air';
+
+  const $ = s => document.querySelector(s);
+  const list = $('#list');
+  const modeNote = $('#mode-note');
+
+  function fmt(n){
+    return n.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');
+  }
+  function daysLabel(e){
+    return e.daysLabel || (e.days[0]+'–'+e.days[1]+' дн');
+  }
+
+  // ── compute + render ─────────────────────────────────
+  function render(){
+    const entries = [];
+
+    for (const c of COMPANIES){
+      if (mode === 'air'){
+        const r = c.air.rate(weight, brand);
+        entries.push({
+          co:c.name, variant:'',
+          rate:r, total: r==null ? null : r*weight,
+          days:c.air.days, daysLabel:c.air.days[0]+'–'+c.air.days[1]+' дн',
+          note: c.air.note ? c.air.note(weight, brand) : null,
+          badges: c.air.badges ? c.air.badges(weight, brand) : [],
+          na: r==null
+        });
+      } else {
+        for (const a of c.auto){
+          let r = a.rate(weight);
+          let na=false, note=a.note;
+          if (a.minW && weight < a.minW){ r=null; na=true; }
+          else if (Number.isNaN(r)){ r=null; } // known option, unknown price
+          entries.push({
+            co:c.name, variant:a.v,
+            rate:r, total: r==null ? null : r*weight,
+            days:a.days, daysLabel:daysLabel(a),
+            note, badges:[], na,
+            priceUnknown: r==null && !na
+          });
+        }
+      }
+    }
+
+    const priced = entries.filter(e=>e.total!=null);
+    const minPrice = priced.length ? Math.min(...priced.map(e=>e.total)) : null;
+    const minAvgDays = entries.length
+      ? Math.min(...entries.filter(e=>!e.na).map(e=>(e.days[0]+e.days[1])/2))
+      : null;
+
+    entries.sort((a,b)=>{
+      if (a.total==null && b.total==null) return 0;
+      if (a.total==null) return 1;
+      if (b.total==null) return -1;
+      return a.total-b.total;
+    });
+
+    modeNote.textContent = (mode==='air'?'✈ авиа':'🚚 авто') + ' · ' +
+      (brand?'брендовый':'обычный') + ' · ' + fmt(weight) + ' кг';
+
+    list.innerHTML = entries.map(e=>{
+      const isBest = e.total!=null && e.total===minPrice;
+      const isFast = !e.na && (e.days[0]+e.days[1])/2===minAvgDays;
+      const cls = ['card', isBest?'best':'', isFast?'fast':'', e.na?'na':''].join(' ').trim();
+      const badges = [];
+      if (isBest) badges.push('<span class="badge b-green">Лучшая цена</span>');
+      if (isFast) badges.push('<span class="badge b-blue">Самый быстрый</span>');
+      for (const b of (e.badges||[])) badges.push('<span class="badge '+b.c+'">'+b.t+'</span>');
+      if (e.priceUnknown) badges.push('<span class="badge b-warn">Цена по запросу</span>');
+
+      const priceHtml = e.total!=null
+        ? '$'+fmt(e.total)
+        : (e.na ? '<span class="cur">н/д</span>' : '<span class="cur">по запросу</span>');
+
+      return '<article class="'+cls+'">'
+        + '<div class="top">'
+        +   '<div class="co">'+e.co+(e.variant?' <span class="variant">'+e.variant+'</span>':'')+'</div>'
+        +   '<div class="price">'+priceHtml+'</div>'
+        + '</div>'
+        + '<div class="meta">'
+        +   (e.rate!=null?'<span><b>$'+fmt(e.rate)+'</b>/кг</span>':'')
+        +   '<span>срок: <b>'+e.daysLabel+'</b></span>'
+        + '</div>'
+        + (badges.length?'<div class="badges">'+badges.join('')+'</div>':'')
+        + (e.note?'<p class="note">'+e.note+'</p>':'')
+        + '</article>';
+    }).join('');
+  }
+
+  // ── events ───────────────────────────────────────────
+  $('#w').addEventListener('input', e=>{
+    const v = parseFloat(e.target.value);
+    if (!isNaN(v) && v>0){ weight=v; render(); }
+  });
+  document.querySelectorAll('.quick button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      weight = parseFloat(b.dataset.w);
+      $('#w').value = weight;
+      render();
+    });
+  });
+  function seg(onId, offId, fn){
+    $('#'+onId).addEventListener('click', ()=>{
+      $('#'+onId).classList.add('on');
+      $('#'+offId).classList.remove('on');
+      fn(); render();
+    });
+  }
+  seg('t-reg','t-brand', ()=>brand=false);
+  seg('t-brand','t-reg', ()=>brand=true);
+  seg('m-air','m-auto', ()=>mode='air');
+  seg('m-auto','m-air', ()=>mode='auto');
+
+  render();
+
+  // expose carriers for the tracker module (single source for the dropdown)
+  window.__CARGO_CARRIERS = COMPANIES.map(c=>c.name);
+})();
+
+/* ════════════════ ТАБЫ ════════════════ */
+(function(){
+  const tabs  = { calc:document.getElementById('tab-calc'),  track:document.getElementById('tab-track') };
+  const views = { calc:document.getElementById('view-calc'), track:document.getElementById('view-track') };
+  function show(which){
+    for (const k in views){
+      const on = k===which;
+      views[k].hidden = !on;
+      tabs[k].classList.toggle('on', on);
+      tabs[k].setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+  }
+  tabs.calc.addEventListener('click', ()=>show('calc'));
+  tabs.track.addEventListener('click', ()=>show('track'));
+})();
+
+/* ════════════════ ТРЕКИНГ (МОИ ПОСЫЛКИ) ════════════════
+   Модель повторяет будущую схему БД (v2):
+     батч  = user_batch(carrier, batchNo, status)   ← общий статус рейса
+     трек  = parcel(trackCode, name, cost)          ← личный список внутри батча
+   Пока всё в localStorage, статус ставится вручную. В v2 таблицу
+   batch_status будет заполнять MTProto-воркер, читающий карго-каналы. */
+(function(){
+  const KEY = 'cargo_parcels_v1';
+  const CARRIERS = (window.__CARGO_CARRIERS && window.__CARGO_CARRIERS.length)
+    ? window.__CARGO_CARRIERS
+    : ['WIN','MEEST','COMFORT','TUJJOR','CHIN'];
+
+  // Статусы = будущий enum для авто-парсинга каналов
+  const STATUSES = [
+    { id:'awaiting',  label:'Ожидает сортировки',        cls:'b-mut'   },
+    { id:'sorting',   label:'На сортировке',             cls:'b-warn'  },
+    { id:'airport',   label:'Отправлен в аэропорт',      cls:'b-blue'  },
+    { id:'transit',   label:'В пути',                    cls:'b-blue'  },
+    { id:'arrived',   label:'На складе в Узбекистане',   cls:'b-green' },
+    { id:'delivered', label:'Выдан / получен',           cls:'b-green' }
+  ];
+  const statusMap = {};
+  STATUSES.forEach(s=> statusMap[s.id]=s);
+
+  function load(){
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return { batches:[] };
+      const d = JSON.parse(raw);
+      return (d && Array.isArray(d.batches)) ? d : { batches:[] };
+    } catch(e){ return { batches:[] }; }
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(data)); } catch(e){} }
+
+  let data = load();
+
+  const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  function fmt(n){ return n.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1'); }
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c=>(
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+    ));
+  }
+
+  // fill carrier dropdown
+  const carrierSel = document.getElementById('nb-carrier');
+  carrierSel.innerHTML = CARRIERS.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+
+  const box = document.getElementById('batches');
+  const summary = document.getElementById('track-summary');
+
+  function render(){
+    if (!data.batches.length){
+      box.innerHTML = '<div class="track-empty">Пока нет посылок.<br>'
+        + 'Добавь партию сверху — например, <b>WIN · 215-AVIA</b> — и внеси свои трек-коды.</div>';
+      summary.innerHTML = '';
+      return;
+    }
+
+    let totalParcels = 0, totalCost = 0, costShown = false;
+
+    box.innerHTML = data.batches.map(b=>{
+      const st = statusMap[b.status] || STATUSES[0];
+      totalParcels += b.parcels.length;
+
+      const rows = b.parcels.map(p=>{
+        const c = parseFloat(p.cost);
+        const hasCost = !isNaN(c);
+        if (hasCost){ totalCost += c; costShown = true; }
+        return '<div class="prow">'
+          + '<span class="track">'+esc(p.trackCode || '—')+'</span>'
+          + '<span class="pname">'+esc(p.name || '—')+'</span>'
+          + (hasCost ? '<span class="pcost">$'+fmt(c)+'</span>' : '')
+          + '<button class="x" data-del-parcel="'+b.id+':'+p.id+'" aria-label="Удалить трек">✕</button>'
+          + '</div>';
+      }).join('');
+
+      const opts = STATUSES.map(s=>
+        '<option value="'+s.id+'"'+(s.id===b.status?' selected':'')+'>'+s.label+'</option>'
+      ).join('');
+
+      return '<article class="card batch">'
+        + '<div class="top">'
+        +   '<div class="co">'+esc(b.carrier)+' <span class="variant">'+esc(b.batchNo)+'</span></div>'
+        +   '<button class="x" data-del-batch="'+b.id+'" aria-label="Удалить партию">Удалить ✕</button>'
+        + '</div>'
+        + '<div class="batch-status">'
+        +   '<span class="badge '+st.cls+'">'+st.label+'</span>'
+        +   '<select data-status="'+b.id+'" aria-label="Статус партии">'+opts+'</select>'
+        + '</div>'
+        + (rows ? '<div class="parcels">'+rows+'</div>' : '')
+        + '<div class="parcel-add">'
+        +   '<input class="track" data-f="track" placeholder="Трек-код" aria-label="Трек-код">'
+        +   '<input class="name" data-f="name" placeholder="Товар" aria-label="Название товара">'
+        +   '<input class="cost" data-f="cost" inputmode="decimal" placeholder="$" aria-label="Цена">'
+        +   '<button data-add-parcel="'+b.id+'" aria-label="Добавить трек-код">+</button>'
+        + '</div>'
+        + '</article>';
+    }).join('');
+
+    summary.innerHTML = '<span>партий: <b>'+data.batches.length+'</b></span>'
+      + '<span>трек-кодов: <b>'+totalParcels+'</b></span>'
+      + (costShown ? '<span>сумма: <b>$'+fmt(totalCost)+'</b></span>' : '');
+  }
+
+  // add batch
+  const batchInput = document.getElementById('nb-batch');
+  function addBatch(){
+    const carrier = carrierSel.value;
+    const batchNo = batchInput.value.trim();
+    if (!batchNo) return;
+    data.batches.unshift({
+      id: uid('b_'), carrier, batchNo,
+      status: 'awaiting', updatedAt: Date.now(), parcels: []
+    });
+    batchInput.value = '';
+    save(); render();
+  }
+  document.getElementById('nb-add').addEventListener('click', addBatch);
+  batchInput.addEventListener('keydown', e=>{ if (e.key==='Enter') addBatch(); });
+
+  // delegated actions on the batch list
+  box.addEventListener('click', e=>{
+    const delB = e.target.closest('[data-del-batch]');
+    if (delB){
+      data.batches = data.batches.filter(b=>b.id!==delB.dataset.delBatch);
+      save(); render(); return;
+    }
+    const delP = e.target.closest('[data-del-parcel]');
+    if (delP){
+      const [bid,pid] = delP.dataset.delParcel.split(':');
+      const b = data.batches.find(x=>x.id===bid);
+      if (b){ b.parcels = b.parcels.filter(p=>p.id!==pid); save(); render(); }
+      return;
+    }
+    const addP = e.target.closest('[data-add-parcel]');
+    if (addP){
+      const wrap = addP.closest('.parcel-add');
+      const track = wrap.querySelector('[data-f="track"]').value.trim();
+      const name  = wrap.querySelector('[data-f="name"]').value.trim();
+      const cost  = wrap.querySelector('[data-f="cost"]').value.trim();
+      if (!track && !name) return;
+      const b = data.batches.find(x=>x.id===addP.dataset.addParcel);
+      if (b){ b.parcels.push({ id:uid('p_'), trackCode:track, name, cost }); save(); render(); }
+      return;
+    }
+  });
+
+  // status change
+  box.addEventListener('change', e=>{
+    const sel = e.target.closest('[data-status]');
+    if (sel){
+      const b = data.batches.find(x=>x.id===sel.dataset.status);
+      if (b){ b.status = sel.value; b.updatedAt = Date.now(); save(); render(); }
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
