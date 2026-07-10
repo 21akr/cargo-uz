@@ -43,6 +43,8 @@ prisma/schema.prisma                # BatchStatusRecord + User + UserBatch + Par
 - `DELETE /tracking/parcels/:id`
 - `POST /ingest/simulate`            `{ carrier, text }` — **dev only**: run the full
   parse→upsert→notify pipeline on a pasted channel post, no MTProto needed.
+- `GET  /board/latest?limit=`        public: latest arrival per transport (avia/avto)
+  + a feed of recently-updated batches (drives the **Рейсы** tab).
 
 Tracking routes need `Authorization: tma <initData>` from the Mini App. For local
 dev, set `DEV_TG_USER_ID` to bypass and act as a fixed user.

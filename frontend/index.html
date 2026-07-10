@@ -314,6 +314,32 @@
     padding:9px 12px;font-size:12.5px;margin:12px 0;line-height:1.45;
   }
 
+  /* ── доска рейсов ─────────────────────────────────── */
+  .board-h{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--ink);
+    margin:20px 2px 10px;
+  }
+  .board-arrivals{display:flex;gap:10px;flex-wrap:wrap}
+  .arrival-card{
+    flex:1;min-width:150px;background:var(--card);
+    border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;
+  }
+  .arr-title{
+    font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--mut);
+  }
+  .arr-batch{font-family:'Oswald',sans-serif;font-weight:600;font-size:16px;margin-top:7px}
+  .arr-when{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut);margin-top:3px}
+  .arr-empty{color:var(--mut);font-size:13px;margin-top:7px}
+  .board-row{
+    display:flex;align-items:center;gap:10px;padding:10px 2px;
+    border-bottom:1px solid var(--line);font-size:13px;
+  }
+  .board-co{flex:1;color:var(--ink)}
+  .board-co b{font-family:'IBM Plex Mono',monospace;font-weight:600}
+  .board-when{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut);white-space:nowrap}
+
   /* ── footnotes / table ─────────────────────────────── */
   details{
     margin-top:26px;border:1px solid var(--line);border-radius:var(--radius);
@@ -378,6 +404,7 @@
   <nav class="tabs" role="tablist" aria-label="Разделы">
     <button type="button" class="tab on" id="tab-calc" role="tab" aria-selected="true">Калькулятор</button>
     <button type="button" class="tab" id="tab-track" role="tab" aria-selected="false">Мои посылки</button>
+    <button type="button" class="tab" id="tab-board" role="tab" aria-selected="false">Рейсы</button>
   </nav>
 
   <!-- ══════════ ВИД: КАЛЬКУЛЯТОР ══════════ -->
@@ -473,6 +500,15 @@
       Статус пока ставится вручную. В версии 2 он будет <b>обновляться сам</b> —
       бот прочитает объявления карго-каналов и подтянет статус вашего рейса.
     </p>
+  </div>
+
+  <!-- ══════════ ВИД: РЕЙСЫ (лента статусов) ══════════ -->
+  <div id="view-board" role="tabpanel" hidden>
+    <h2 class="board-h">Последние прибытия в Узбекистан</h2>
+    <div class="board-arrivals" id="board-arrivals"></div>
+    <h2 class="board-h">Недавние обновления рейсов</h2>
+    <div id="board-list"></div>
+    <p class="track-hint" id="board-note"></p>
   </div>
 
   <footer>
@@ -692,18 +728,18 @@
 
 /* ════════════════ ТАБЫ ════════════════ */
 (function(){
-  const tabs  = { calc:document.getElementById('tab-calc'),  track:document.getElementById('tab-track') };
-  const views = { calc:document.getElementById('view-calc'), track:document.getElementById('view-track') };
+  const ids = ['calc','track','board'];
+  const tabs = {}, views = {};
+  ids.forEach(k=>{ tabs[k] = document.getElementById('tab-'+k); views[k] = document.getElementById('view-'+k); });
   function show(which){
-    for (const k in views){
+    ids.forEach(k=>{
       const on = k===which;
       views[k].hidden = !on;
       tabs[k].classList.toggle('on', on);
       tabs[k].setAttribute('aria-selected', on ? 'true' : 'false');
-    }
+    });
   }
-  tabs.calc.addEventListener('click', ()=>show('calc'));
-  tabs.track.addEventListener('click', ()=>show('track'));
+  ids.forEach(k=> tabs[k].addEventListener('click', ()=>show(k)));
 })();
 
 /* ════════════════ ТРЕКИНГ (МОИ ПОСЫЛКИ) ════════════════
@@ -751,8 +787,12 @@
   }
   // "215 avia" / "215-avia" → "215-AVIA" (тот же формат, что и на бэкенде)
   function normBatch(input){
-    const m = String(input).match(/(\d{1,4})\s*[-–—]?\s*(avia|avto)/i);
-    return m ? m[1] + '-' + m[2].toUpperCase() : String(input).trim().toUpperCase();
+    const s = String(input).trim();
+    let m = s.match(/(\d{1,4})\s*[-–—]?\s*(avia|avto)/i);        // 215-AVIA
+    if (m) return m[1] + '-' + m[2].toUpperCase();
+    m = s.match(/\b(av|at)\s*[-–—]?\s*(\d{1,4})\b/i);            // AV-24 / AT-14 (CHIN)
+    if (m) return m[1].toUpperCase() + '-' + m[2];
+    return s.toUpperCase();
   }
 
   // ── валидация входных данных ──────────────────────────
@@ -982,6 +1022,87 @@
 
   // первичная загрузка
   (async()=>{ try { await refresh(); } catch(err){ showError(friendly(err)); render(); } })();
+})();
+
+/* ════════════════ РЕЙСЫ (лента статусов) ════════════════
+   Публичная лента из batch_status (общие данные каналов). Доступна только в
+   API-режиме — в офлайне показываем подсказку. */
+(function(){
+  const API_BASE = (window.CARGO_API_BASE
+    || (function(){ try { return localStorage.getItem('cargo_api_base'); } catch(e){ return ''; } })()
+    || '').replace(/\/+$/,'');
+  const initData = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || '';
+
+  const LABEL = { awaiting:'Ожидает', sorting:'Сортировка', airport:'В аэропорту',
+                  transit:'В пути', arrived:'На складе в Узб', delivered:'Выдан' };
+  const CLS   = { awaiting:'b-mut', sorting:'b-warn', airport:'b-blue',
+                  transit:'b-blue', arrived:'b-green', delivered:'b-green' };
+
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c=>(
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+    ));
+  }
+  function ago(iso){
+    const t = new Date(iso).getTime();
+    if (!isFinite(t)) return '';
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 60)    return 'только что';
+    if (s < 3600)  return Math.floor(s/60)  + ' мин назад';
+    if (s < 86400) return Math.floor(s/3600) + ' ч назад';
+    return Math.floor(s/86400) + ' дн назад';
+  }
+
+  const arrEl  = document.getElementById('board-arrivals');
+  const listEl = document.getElementById('board-list');
+  const noteEl = document.getElementById('board-note');
+
+  function arrivalCard(title, icon, rec){
+    if (!rec) return '<div class="arrival-card"><div class="arr-title">'+icon+' '+title+'</div>'
+      + '<div class="arr-empty">нет данных</div></div>';
+    return '<div class="arrival-card"><div class="arr-title">'+icon+' '+title+'</div>'
+      + '<div class="arr-batch">'+esc(rec.carrier)+' · '+esc(rec.batchNo)+'</div>'
+      + '<div class="arr-when">'+ago(rec.updatedAt)+'</div></div>';
+  }
+
+  function render(data){
+    arrEl.innerHTML = arrivalCard('Последний авиарейс','✈', data.arrivals && data.arrivals.avia)
+      + arrivalCard('Последний авторейс','🚚', data.arrivals && data.arrivals.avto);
+    const recent = data.recent || [];
+    if (!recent.length){ listEl.innerHTML = '<div class="track-empty">Пока нет данных о рейсах.</div>'; return; }
+    listEl.innerHTML = recent.map(r=>{
+      const ic = r.transport==='avia' ? '✈' : '🚚';
+      return '<div class="board-row">'
+        + '<span class="board-co">'+esc(r.carrier)+' <b>'+esc(r.batchNo)+'</b> '+ic+'</span>'
+        + '<span class="badge '+(CLS[r.status]||'b-mut')+'">'+(LABEL[r.status]||esc(r.status))+'</span>'
+        + '<span class="board-when">'+ago(r.updatedAt)+'</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  let loading = false;
+  async function load(){
+    if (loading) return;
+    if (!API_BASE){
+      noteEl.textContent = 'Лента рейсов появится после подключения бэкенда (v2).';
+      arrEl.innerHTML = ''; listEl.innerHTML = '';
+      return;
+    }
+    loading = true;
+    noteEl.textContent = 'Загрузка…';
+    try {
+      const res = await fetch(API_BASE + '/board/latest', {
+        headers: initData ? { 'Authorization':'tma ' + initData } : {}
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      render(await res.json());
+      noteEl.textContent = '';
+    } catch(e){
+      noteEl.textContent = 'Не удалось загрузить ленту. Проверьте соединение.';
+    } finally { loading = false; }
+  }
+
+  document.getElementById('tab-board').addEventListener('click', load);
 })();
 </script>
 </body>

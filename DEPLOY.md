@@ -19,7 +19,17 @@
 
 ## Part 1 — Run everything locally
 
-### Prereqs
+### Fastest: one command
+With Docker installed, from the repo root:
+```bash
+docker compose up            # Postgres + API on http://localhost:3000
+```
+This brings up Postgres, syncs the schema (`prisma db push`), and starts the API
+in dev-auth mode (`DEV_TG_USER_ID=123456789`). Skip to step 3 to point the frontend
+at it. To enable push / live ingest, uncomment the `TELEGRAM_BOT_TOKEN` / `TG_*`
+lines in `docker-compose.yml`. The steps below are the manual equivalent.
+
+### Prereqs (manual path)
 Node 18+ and either Docker or a free Neon Postgres.
 
 ### 1. Start Postgres

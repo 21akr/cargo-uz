@@ -1,0 +1,42 @@
+# One-command local stack:  docker compose up
+# Postgres + the NestJS API (tracking + ingest + board). API-only mode by default
+# (no Telegram creds) — add TELEGRAM_BOT_TOKEN / TG_* below to enable push + ingest.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cargo
+    ports:
+      - "5432:5432"
+    volumes:
+      - cargo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cargo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/cargo?schema=public
+      PORT: "3000"
+      # Local dev: bypass Telegram auth and act as this user id.
+      DEV_TG_USER_ID: "123456789"
+      # Empty = allow any origin (fine for local). Set to your Vercel URL in prod.
+      CORS_ORIGINS: ""
+      # Enable notifications / live ingest by filling these in:
+      # TELEGRAM_BOT_TOKEN: ""
+      # TG_API_ID: ""
+      # TG_API_HASH: ""
+      # TG_SESSION: ""
+      # INGEST_CHANNELS: "WIN=@win_channel,CHIN=@chin_channel"
+    ports:
+      - "3000:3000"
+
+volumes:
+  cargo_pgdata:

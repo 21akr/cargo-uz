@@ -7,6 +7,7 @@ import { HealthController } from './common/health.controller';
 import { TrackingModule } from './tracking/tracking.module';
 import { IngestModule } from './ingest/ingest.module';
 import { NotifyModule } from './notify/notify.module';
+import { BoardModule } from './board/board.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { NotifyModule } from './notify/notify.module';
     TrackingModule,
     IngestModule,
     NotifyModule,
+    BoardModule,
   ],
   controllers: [HealthController],
 })

@@ -82,4 +82,22 @@ Reyslar saralash vaqtlari yuk chiqish kuni saot 12:00 (tushlik vaqti) ga qadar k
     expect(res[0].batchNo).toBe('213-AVIA');
     expect(res[0].status).toBe('arrived');
   });
+
+  it('parses CHIN letter-prefixed AVTO code as transit', () => {
+    const res = parser.parse("Bugun  AT-14 reysimiz ham  Oʻzbekistonga tomon yo'lga chiqdi.");
+    expect(res).toHaveLength(1);
+    expect(res[0]).toEqual(
+      expect.objectContaining({ batchNo: 'AT-14', transport: 'avto', status: 'transit' }),
+    );
+  });
+
+  it('parses CHIN letter-prefixed AVIA code and ignores the date', () => {
+    const res = parser.parse(
+      "Bugun 9-iyul Payshanba AV-24 reysimiz Xitoy omboridan O'zbekiston tomon yo'lga chiqdi",
+    );
+    expect(res).toHaveLength(1);
+    expect(res[0]).toEqual(
+      expect.objectContaining({ batchNo: 'AV-24', transport: 'avia', status: 'transit' }),
+    );
+  });
 });
