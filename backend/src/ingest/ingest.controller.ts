@@ -1,7 +1,9 @@
 import { Body, Controller, Post } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { IngestService } from './ingest.service';
 import { SimulatePostDto } from './dto/simulate-post.dto';
 
+@ApiTags('ingest')
 @Controller('ingest')
 export class IngestController {
   constructor(private readonly ingest: IngestService) {}

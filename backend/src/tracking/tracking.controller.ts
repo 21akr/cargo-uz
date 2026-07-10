@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { TelegramAuthGuard } from '../common/telegram-auth.guard';
 import { TgUser } from '../common/tg-user.decorator';
 import type { TmaUser } from '../common/telegram-auth.util';
@@ -6,6 +7,8 @@ import { TrackingService } from './tracking.service';
 import { RegisterBatchDto } from './dto/register-batch.dto';
 import { AddParcelDto } from './dto/add-parcel.dto';
 
+@ApiTags('tracking')
+@ApiSecurity('tma')
 @UseGuards(TelegramAuthGuard)
 @Controller('tracking')
 export class TrackingController {

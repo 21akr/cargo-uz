@@ -46,6 +46,9 @@ prisma/schema.prisma                # BatchStatusRecord + User + UserBatch + Par
 - `GET  /board/latest?limit=`        public: latest arrival per transport (avia/avto)
   + a feed of recently-updated batches (drives the **Рейсы** tab).
 
+Interactive API docs (Swagger UI) at **`/docs`**, raw OpenAPI at `/docs-json`.
+Every request is logged as `[HTTP] METHOD path status +Nms`.
+
 Tracking routes need `Authorization: tma <initData>` from the Mini App. For local
 dev, set `DEV_TG_USER_ID` to bypass and act as a fixed user.
 
