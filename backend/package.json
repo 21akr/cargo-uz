@@ -12,7 +12,8 @@
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "mint:session": "node scripts/mint-session.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

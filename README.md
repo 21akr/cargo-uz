@@ -43,10 +43,12 @@ It's a static file — just open `frontend/index.html`, or serve it:
 npx serve frontend
 ```
 
-### Deploy (frontend)
+### Deploy
 
-Vercel, project root = `frontend/`. Then in @BotFather: `/newapp` → select bot →
-paste the Vercel URL to get the Mini App button. The same URL is a normal website.
+See **[DEPLOY.md](DEPLOY.md)** — running the full stack locally (Postgres +
+API + tracker), and production (Vercel frontend, always-on backend, MTProto
+session, BotFather Mini App). In short: frontend → Vercel (root = `frontend/`),
+backend → an always-on box, DB → Neon/Supabase.
 
 ## Roadmap
 
