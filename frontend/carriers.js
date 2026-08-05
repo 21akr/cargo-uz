@@ -17,6 +17,9 @@
      'same'   — цена как за обычный товар (подтверждено)
      [tiers]  — своя шкала
      null     — НЕИЗВЕСТНО, показываем «уточняется», цену не выдумываем
+
+   contacts: channel · bot · admin · phone · instagram · map · site · note
+     Любое поле можно оставить null — в интерфейсе просто не появится.
    ═══════════════════════════════════════════════════════════════════ */
 window.CARGO_CARRIERS = [
   {
@@ -36,7 +39,16 @@ window.CARGO_CARRIERS = [
     notes: ['Цена за брендовые товары не отличается от обычных (подтверждено).'],
     limits: [],
     unknowns: ['Надёжность на таможне — нет публичных данных'],
-    contacts: { channel: null, bot: null, admin: null, phone: null, site: null },
+    contacts: {
+      channel: null,
+      bot: '@wincargobot',
+      admin: '@cargowin',
+      phone: '+998 94 934 08 38',
+      instagram: null,
+      map: null,
+      site: null,
+      note: 'Бот нужен для получения ID, менеджер — по вопросам заказа.'
+    },
     pros: ['Бренд без наценки — редкость среди карго', 'Бесплатная доставка по Узбекистану свыше 5 кг'],
     cons: ['Не самый быстрый по авиа', 'Нет публичных данных о таможне']
   },
@@ -133,7 +145,10 @@ window.CARGO_CARRIERS = [
       bot: null,
       admin: '@Tujjor_express_office',
       phone: '+998 33 099 80 09',
-      site: null
+      instagram: null,
+      map: null,
+      site: null,
+      note: 'Доставку заказывать только у админа — иначе заявку не оформят.'
     },
     pros: ['Самое дешёвое авто (почта 5.49 $)', 'Оплата наличными курьеру в Ташкенте'],
     cons: ['Авиа подорожало для посылок до 10 кг (было 9 $)', 'Тариф на бренд сейчас неизвестен']
@@ -156,9 +171,18 @@ window.CARGO_CARRIERS = [
     delivery: null,
     notes: ['Номера рейсов у CHIN в формате AV-24 (авиа) и AT-14 (авто) — их и вводи в трекере.'],
     limits: [],
-    unknowns: ['Тариф на брендовые товары'],
-    contacts: { channel: null, bot: null, admin: null, phone: null, site: null },
-    pros: ['Быстрый авиа (3–5 дней)', 'Дешёвое авто (5.5 $)'],
-    cons: ['Неизвестен тариф на бренд', 'Мало публичной информации']
+    unknowns: ['Тариф на брендовые товары', 'Стоимость доставки по городу'],
+    contacts: {
+      channel: '@chin_cargouz',
+      bot: null,
+      admin: null,
+      phone: '+998 90 113 44 77',
+      instagram: 'https://www.instagram.com/chin_cargo',
+      map: 'https://yandex.uz/maps/10335/tashkent/?ll=69.190473%2C41.393999&z=13',
+      site: null,
+      note: null
+    },
+    pros: ['Быстрый авиа (3–5 дней)', 'Дешёвое авто (5.5 $)', 'Есть офис в Ташкенте'],
+    cons: ['Неизвестен тариф на бренд', 'Нет данных о доставке по городу']
   }
 ];

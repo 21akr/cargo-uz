@@ -180,6 +180,20 @@
     border-radius:999px;padding:4px 11px;cursor:pointer;
   }
   .quick button:hover{border-color:var(--blue);color:var(--blue)}
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .fchip{
+    font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;
+    border:1px solid var(--line);background:var(--input);color:var(--mut);
+    border-radius:999px;padding:6px 12px;cursor:pointer;
+  }
+  .fchip:hover{border-color:var(--blue);color:var(--blue)}
+  .fchip.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  [data-theme="dark"] .fchip.on{color:#0F1626}
+  .fchip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  .no-match{
+    text-align:center;color:var(--mut);font-size:13px;line-height:1.6;
+    padding:24px 16px;border:1px dashed var(--line);border-radius:var(--radius);
+  }
   .seg{
     display:flex;width:100%;
     border:1px solid var(--line);border-radius:8px;overflow:hidden;
@@ -556,6 +570,15 @@
           <button type="button" id="m-auto">🚚 Авто</button>
         </div>
       </div>
+      <div class="field">
+        <label class="lbl" id="lbl-filter">Фильтры</label>
+        <div class="filters" role="group" aria-labelledby="lbl-filter">
+          <button type="button" class="fchip" data-f="known" aria-pressed="false">Цена известна</button>
+          <button type="button" class="fchip" data-f="nomin" aria-pressed="false">Без минимума</button>
+          <button type="button" class="fchip" data-f="nobrandfee" aria-pressed="false">Бренд без наценки</button>
+          <button type="button" class="fchip" data-f="delivery" aria-pressed="false">Есть доставка</button>
+        </div>
+      </div>
     </section>
 
     <section class="results" aria-live="polite">
@@ -709,6 +732,9 @@
 
   // ── state ────────────────────────────────────────────
   let weight = 1, brand = false, mode = 'air';
+  const filters = { known:false, nomin:false, nobrandfee:false, delivery:false };
+  const byId = {};
+  DATA.forEach(c=>{ byId[c.id] = c; });
 
   const $ = s => document.querySelector(s);
   const list = $('#list');
@@ -727,8 +753,23 @@
   }
 
   // ── compute + render ─────────────────────────────────
+  // Брендовых авто-тарифов компании не публикуют — в режиме «авто»
+  // этот фильтр ничего не значит, поэтому убираем его с глаз.
+  function syncFilterChips(){
+    const bf = document.querySelector('.fchip[data-f="nobrandfee"]');
+    if (!bf) return;
+    const hide = mode !== 'air';
+    bf.hidden = hide;
+    if (hide && filters.nobrandfee){
+      filters.nobrandfee = false;
+      bf.classList.remove('on');
+      bf.setAttribute('aria-pressed','false');
+    }
+  }
+
   function render(){
-    const entries = [];
+    syncFilterChips();
+    let entries = [];
 
     for (const c of COMPANIES){
       if (mode === 'air'){
@@ -751,16 +792,29 @@
             co:c.name, id:c.id, variant:a.v,
             rate:r, total: r==null ? null : r*weight,
             days:a.days, daysLabel:daysLabel(a),
-            note, badges:[], na,
+            note, badges:[], na, minW:a.minW,
             priceUnknown: r==null && !na
           });
         }
       }
     }
 
+    // Фильтры применяем ДО подсчёта «лучшей цены» и «самого быстрого» —
+    // иначе бейдж мог бы указывать на скрытый вариант.
+    const total = entries.length;
+    entries = entries.filter(e=>{
+      const c = byId[e.id];
+      if (filters.known && e.total == null) return false;
+      if (filters.nomin && e.minW) return false;
+      if (filters.nobrandfee && !(c && c.air.brand === 'same')) return false;
+      if (filters.delivery && !(c && c.delivery)) return false;
+      return true;
+    });
+    const hidden = total - entries.length;
+
     const priced = entries.filter(e=>e.total!=null);
     const minPrice = priced.length ? Math.min(...priced.map(e=>e.total)) : null;
-    const minAvgDays = entries.length
+    const minAvgDays = entries.filter(e=>!e.na).length
       ? Math.min(...entries.filter(e=>!e.na).map(e=>(e.days[0]+e.days[1])/2))
       : null;
 
@@ -772,7 +826,8 @@
     });
 
     modeNote.textContent = (mode==='air'?'✈ авиа':'🚚 авто') + ' · ' +
-      (brand?'брендовый':'обычный') + ' · ' + fmt(weight) + ' кг';
+      (brand?'брендовый':'обычный') + ' · ' + fmt(weight) + ' кг' +
+      (hidden ? ' · скрыто ' + hidden : '');
 
     // Подпись под глобусом: кто быстрее всех именно при текущих настройках.
     // Из тех же entries, что и карточки, — разойтись не может.
@@ -781,7 +836,7 @@
     globeNote.innerHTML = fastest
       ? 'быстрее всего · <b>' + esc(fastest.co + (fastest.variant?' '+fastest.variant:'')) + '</b> · '
         + esc(fastest.daysLabel)
-      : 'нет доступных вариантов';
+      : 'нет подходящих вариантов';
 
     const html = entries.map(e=>{
       const isBest = e.total!=null && e.total===minPrice;
@@ -814,7 +869,10 @@
     }).join('');
 
     // «Гонка цен»: карточки не перепрыгивают, а переезжают на новые места.
-    U.flip(list, '.card', ()=>{ list.innerHTML = html; });
+    U.flip(list, '.card', ()=>{
+      list.innerHTML = entries.length ? html
+        : '<div class="no-match">Ни один вариант не подходит под фильтры.<br>Сними лишние — и результаты вернутся.</div>';
+    });
   }
 
   // ── events ───────────────────────────────────────────
@@ -838,6 +896,17 @@
       fn(); render();
     });
   }
+  document.querySelectorAll('.fchip').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const k = b.dataset.f;
+      filters[k] = !filters[k];
+      b.classList.toggle('on', filters[k]);
+      b.setAttribute('aria-pressed', filters[k] ? 'true' : 'false');
+      U.haptic('light');
+      render();
+    });
+  });
+
   seg('t-reg','t-brand', ()=>brand=false);
   seg('t-brand','t-reg', ()=>brand=true);
   seg('m-air','m-auto', ()=>mode='air');
@@ -852,16 +921,25 @@
     if (tiers.length === 1) return fmt(tiers[0].rate) + '&nbsp;$';
     return fmt(tiers[0].rate) + ' → ' + fmt(tiers[tiers.length-1].rate) + '&nbsp;$';
   }
-  const tgLink = U.tgLink;
-  function contactLine(ct){
-    if (!ct) return '';
-    const out = [];
-    if (ct.channel) out.push(tgLink(ct.channel, 'канал ' + ct.channel));
-    if (ct.bot)     out.push(tgLink(ct.bot, 'бот ' + ct.bot));
-    if (ct.admin)   out.push(tgLink(ct.admin, 'админ ' + ct.admin));
-    if (ct.phone)   out.push('<a href="tel:'+esc(ct.phone.replace(/[^\d+]/g,''))+'">'+esc(ct.phone)+'</a>');
-    if (ct.site)    out.push('<a href="'+esc(ct.site)+'" target="_blank" rel="noopener">сайт</a>');
-    return out.join(', ');
+  // Один список контактов на всё приложение — и для примечаний, и для шторки.
+  function contactItems(ct){
+    if (!ct) return [];
+    const tme = h => 'https://t.me/' + String(h).replace(/^@/,'');
+    const items = [];
+    if (ct.channel)   items.push({ href:tme(ct.channel), label:'Канал ' + ct.channel });
+    if (ct.bot)       items.push({ href:tme(ct.bot),     label:'Бот ' + ct.bot });
+    if (ct.admin)     items.push({ href:tme(ct.admin),   label:'Написать ' + ct.admin });
+    if (ct.phone)     items.push({ href:'tel:' + ct.phone.replace(/[^\d+]/g,''), label:ct.phone, tel:true });
+    if (ct.instagram) items.push({ href:ct.instagram, label:'Instagram' });
+    if (ct.map)       items.push({ href:ct.map,       label:'Офис на карте' });
+    if (ct.site)      items.push({ href:ct.site,      label:'Сайт' });
+    return items;
+  }
+  function contactAnchors(ct){
+    return contactItems(ct).map(i=>
+      '<a href="'+esc(i.href)+'"' + (i.tel ? '' : ' target="_blank" rel="noopener"') + '>'
+      + esc(i.label) + '</a>'
+    );
   }
 
   function renderReference(){
@@ -883,8 +961,9 @@
       (c.notes || []).forEach(n=> bits.push(esc(n)));
       if (c.air.effectiveFrom) bits.push('Авиа-тарифы действуют с партии ' + esc(c.air.effectiveFrom) + '.');
       if (c.delivery) bits.push('<b>Доставка:</b> ' + esc(c.delivery));
-      const ct = contactLine(c.contacts);
+      const ct = contactAnchors(c.contacts).join(', ');
       bits.push('<b>Контакты:</b> ' + (ct || 'уточняются'));
+      if (c.contacts && c.contacts.note) bits.push(esc(c.contacts.note));
       (c.unknowns || []).forEach(u=> bits.push('<b>Уточняется:</b> ' + esc(u)));
       return '<p><b>'+esc(c.name)+'</b> · обновлено ' + esc(c.updated || '—') + '<br>' + bits.join('<br>') + '</p>';
     }).join('');
@@ -1008,15 +1087,10 @@
     if ((c.unknowns||[]).length)
       h += block('Что уточняется', '<ul class="sh-list warn">'+c.unknowns.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>');
 
-    const ct = c.contacts || {};
-    const links = [];
-    if (ct.channel) links.push(tgLink(ct.channel, 'Канал ' + ct.channel));
-    if (ct.bot)     links.push(tgLink(ct.bot, 'Бот ' + ct.bot));
-    if (ct.admin)   links.push(tgLink(ct.admin, 'Админ ' + ct.admin));
-    if (ct.phone)   links.push('<a href="tel:'+esc(ct.phone.replace(/[^\d+]/g,''))+'">'+esc(ct.phone)+'</a>');
-    if (ct.site)    links.push('<a href="'+esc(ct.site)+'" target="_blank" rel="noopener">Сайт</a>');
+    const links = contactAnchors(c.contacts);
     h += block('Контакты', links.length
       ? '<div class="sh-contacts">'+links.join('')+'</div>'
+        + (c.contacts.note ? '<p class="sh-text" style="margin-top:9px">'+esc(c.contacts.note)+'</p>' : '')
       : '<p class="sh-none">уточняются</p>');
 
     if (c.batchFormat)
