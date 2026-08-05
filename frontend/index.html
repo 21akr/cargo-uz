@@ -361,6 +361,72 @@
   .board-co b{font-family:'IBM Plex Mono',monospace;font-weight:600}
   .board-when{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--mut);white-space:nowrap}
 
+  /* ── карточка компании (шторка) ────────────────────── */
+  .sheet-scrim{
+    position:fixed;inset:0;z-index:49;
+    background:rgba(10,16,30,.45);
+    opacity:0;pointer-events:none;transition:opacity .3s ease;
+  }
+  .sheet-scrim.up{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;
+    max-width:560px;margin:0 auto;
+    background:var(--card);
+    border:1px solid var(--line);border-bottom:0;
+    border-radius:16px 16px 0 0;
+    max-height:86vh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:10px 16px 26px;
+    transform:translateY(101%);pointer-events:none;
+    transition:transform .42s cubic-bezier(.22,1,.36,1);
+  }
+  .sheet.up{transform:translateY(0);pointer-events:auto}
+  @media (prefers-reduced-motion:reduce){
+    .sheet{transition:none}
+  }
+  .sheet-grip{
+    width:36px;height:4px;border-radius:2px;background:var(--line);
+    margin:0 auto 12px;
+  }
+  .sh-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .sh-name{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:21px;
+    text-transform:uppercase;letter-spacing:.05em;color:var(--ink);
+  }
+  .sh-upd{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--mut);letter-spacing:.08em}
+  .sh-lbl{
+    font-family:'IBM Plex Mono',monospace;font-size:9.5px;font-weight:600;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--mut);
+    margin:18px 0 8px;
+  }
+  .sh-score{display:grid;grid-template-columns:auto 1fr auto;gap:8px 10px;align-items:center}
+  .sh-score .s-l{font-size:12.5px;color:var(--mut);white-space:nowrap}
+  .sh-score .s-v{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);white-space:nowrap}
+  .sh-score .s-v.none{color:var(--mut)}
+  .meter{height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .meter i{display:block;height:100%;background:var(--blue);border-radius:3px}
+  .sh-tab{width:100%;border-collapse:collapse;font-size:12.5px}
+  .sh-tab td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  .sh-tab td:first-child{color:var(--mut)}
+  .sh-tab td:last-child{text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--ink);white-space:nowrap}
+  .sh-list{list-style:none;font-size:12.5px;line-height:1.55}
+  .sh-list li{padding-left:16px;position:relative;margin-bottom:5px;color:var(--ink)}
+  .sh-list li::before{position:absolute;left:0;font-family:'IBM Plex Mono',monospace;font-weight:600}
+  .sh-list.pro li::before{content:"+";color:var(--green)}
+  .sh-list.con li::before{content:"−";color:var(--red)}
+  .sh-list.warn li::before{content:"?";color:var(--gold)}
+  .sh-text{font-size:12.5px;color:var(--ink);line-height:1.55}
+  .sh-contacts{display:flex;flex-wrap:wrap;gap:8px}
+  .sh-contacts a{
+    font-size:12.5px;color:var(--blue);text-decoration:none;
+    border:1px solid var(--line);border-radius:99px;padding:6px 12px;
+  }
+  .sh-contacts a:hover{border-color:var(--blue)}
+  .sh-none{font-size:12.5px;color:var(--mut)}
+  .card{cursor:pointer}
+  .card:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+  #tariff-body tr{cursor:pointer}
+  #tariff-body tr:hover td{color:var(--blue)}
+
   /* ── footnotes / table ─────────────────────────────── */
   details{
     margin-top:26px;border:1px solid var(--line);border-radius:var(--radius);
@@ -555,6 +621,12 @@
   </footer>
 </div>
 
+<div class="sheet-scrim" id="sheet-scrim"></div>
+<aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-name" tabindex="-1">
+  <div class="sheet-grip" aria-hidden="true"></div>
+  <div id="sheet-body"></div>
+</aside>
+
 <script src="utils.js"></script>
 <script src="carriers.js"></script>
 <script>
@@ -574,7 +646,17 @@
     document.getElementById('theme').textContent = t==='dark' ? '☀️' : '🌙';
   }
   const sysDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  apply(saved() || (sysDark ? 'dark' : 'light'));
+  // Внутри Telegram идём за темой Telegram, а не за системной.
+  // Свою палитру не отдаём — синхронизируем только светлый/тёмный режим.
+  function tgScheme(){
+    try { return Telegram.WebApp.colorScheme || null; } catch(e){ return null; }
+  }
+  apply(saved() || tgScheme() || (sysDark ? 'dark' : 'light'));
+  try {
+    Telegram.WebApp.onEvent('themeChanged', ()=>{
+      if (!saved()) apply(tgScheme() || 'light');
+    });
+  } catch(e){}
   document.getElementById('theme').addEventListener('click', ()=>{
     const next = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
     apply(next); store(next);
@@ -652,7 +734,7 @@
       if (mode === 'air'){
         const r = c.air.rate(weight, brand);
         entries.push({
-          co:c.name, variant:'',
+          co:c.name, id:c.id, variant:'',
           rate:r, total: r==null ? null : r*weight,
           days:c.air.days, daysLabel:c.air.days[0]+'–'+c.air.days[1]+' дн',
           note: c.air.note ? c.air.note(weight, brand) : null,
@@ -666,7 +748,7 @@
           if (a.minW && weight < a.minW){ r=null; na=true; }
           else if (Number.isNaN(r)){ r=null; } // known option, unknown price
           entries.push({
-            co:c.name, variant:a.v,
+            co:c.name, id:c.id, variant:a.v,
             rate:r, total: r==null ? null : r*weight,
             days:a.days, daysLabel:daysLabel(a),
             note, badges:[], na,
@@ -715,7 +797,9 @@
         ? '$'+fmt(e.total)
         : (e.na ? '<span class="cur">н/д</span>' : '<span class="cur">по запросу</span>');
 
-      return '<article class="'+cls+'" data-key="'+esc(e.co+'|'+e.variant)+'">'
+      return '<article class="'+cls+'" data-key="'+esc(e.co+'|'+e.variant)+'"'
+        + ' data-id="'+esc(e.id)+'" role="button" tabindex="0"'
+        + ' aria-label="'+esc(e.co+' — подробнее о компании')+'">'
         + '<div class="top">'
         +   '<div class="co">'+e.co+(e.variant?' <span class="variant">'+e.variant+'</span>':'')+'</div>'
         +   '<div class="price">'+priceHtml+'</div>'
@@ -786,7 +870,7 @@
       const brand = c.air.brand === 'same' ? '= обычным'
         : c.air.brand == null ? 'уточняется'
         : tiersLabel(c.air.brand);
-      return '<tr><td>'+esc(c.name)+'</td>'
+      return '<tr data-id="'+esc(c.id)+'"><td>'+esc(c.name)+'</td>'
         + '<td class="num">'+tiersLabel(c.air.regular)+'</td>'
         + '<td class="num">'+brand+'</td>'
         + '<td class="num">'+c.air.days[0]+'–'+c.air.days[1]+' дн'+(c.air.daysNote?'*':'')+'</td></tr>';
@@ -812,6 +896,175 @@
   }
   renderReference();
 
+  /* ── карточка компании ────────────────────────────────
+     Оценки считаются из данных, а не выставлены вручную:
+     скорость и цена — относительно остальных компаний,
+     бренд-политика — из того, есть наценка или нет.
+     Надёжность мы не выдумываем: нет данных — так и пишем. */
+  const sheet = $('#sheet'), scrim = $('#sheet-scrim'), sheetBody = $('#sheet-body');
+  const tg = (window.Telegram && Telegram.WebApp) || null;
+  let lastFocus = null;
+
+  const avgDays = d => (d[0]+d[1])/2;
+
+  function scoreRows(c){
+    const days = DATA.map(x=>avgDays(x.air.days));
+    const dMin = Math.min(...days), dMax = Math.max(...days);
+    const speed = dMax===dMin ? 100
+      : Math.round(100 - (avgDays(c.air.days)-dMin)/(dMax-dMin)*65);
+
+    const rates = DATA.map(x=>rateFromTiers(x.air.regular, weight)).filter(r=>r!=null);
+    const rMin = Math.min(...rates), rMax = Math.max(...rates);
+    const r = rateFromTiers(c.air.regular, weight);
+    const price = r==null ? null
+      : (rMax===rMin ? 100 : Math.round(100 - (r-rMin)/(rMax-rMin)*65));
+
+    let brandV = null, brandT = 'нет данных';
+    if (c.air.brand === 'same'){ brandV = 100; brandT = 'без наценки'; }
+    else if (Array.isArray(c.air.brand)){
+      const diff = rateFromTiers(c.air.brand, weight) - (r||0);
+      brandV = Math.max(25, Math.round(100 - diff*25));
+      brandT = '+' + fmt(diff) + ' $/кг';
+    }
+    const rel = typeof c.reliability === 'number' ? c.reliability : null;
+
+    return [
+      { l:'Скорость',       v:speed,  t:c.air.days[0]+'–'+c.air.days[1]+' дн' },
+      { l:'Цена',           v:price,  t:r==null?'—':'$'+fmt(r)+'/кг' },
+      { l:'Бренд-политика', v:brandV, t:brandT },
+      { l:'Надёжность',     v:rel,    t:rel==null?'нет данных':'' }
+    ];
+  }
+
+  // «до 10 кг» / «10–45 кг» / «от 45 кг»
+  function tierLabel(tiers, i){
+    const prev = i===0 ? null : tiers[i-1].to;
+    const to = tiers[i].to;
+    if (prev==null && to==null) return 'любой вес';
+    if (prev==null) return 'до ' + fmt(to) + ' кг';
+    if (to==null)   return 'от ' + fmt(prev) + ' кг';
+    return fmt(prev) + '–' + fmt(to) + ' кг';
+  }
+  function tierRows(tiers, suffix){
+    return tiers.map((t,i)=>
+      '<tr><td>'+esc(tierLabel(tiers,i))+(suffix?' · '+esc(suffix):'')+'</td>'
+      + '<td>'+fmt(t.rate)+' $</td></tr>'
+    ).join('');
+  }
+  function block(label, html){
+    return html ? '<div class="sh-lbl">'+label+'</div>' + html : '';
+  }
+
+  function sheetHtml(c){
+    let h = '<div class="sh-top"><span class="sh-name" id="sh-name">'+esc(c.name)+'</span>'
+          + '<span class="sh-upd">ОБНОВЛЕНО '+esc(c.updated||'—')+'</span></div>';
+
+    const tags = [];
+    if (c.air.brand === 'same') tags.push('<span class="badge b-green">Бренд без наценки</span>');
+    if (c.air.flights) tags.push('<span class="badge b-blue">'+esc(c.air.flights)+'</span>');
+    if (c.air.effectiveFrom) tags.push('<span class="badge b-warn">тариф с '+esc(c.air.effectiveFrom)+'</span>');
+    if (tags.length) h += '<div class="badges" style="margin-top:10px">'+tags.join('')+'</div>';
+
+    h += '<div class="sh-lbl">Оценка редакции</div><div class="sh-score">'
+      + scoreRows(c).map(s=>
+          '<span class="s-l">'+s.l+'</span>'
+          + (s.v==null ? '<span></span>' : '<span class="meter"><i style="width:'+s.v+'%"></i></span>')
+          + '<span class="s-v'+(s.v==null?' none':'')+'">'+esc(s.t)+'</span>'
+        ).join('')
+      + '</div>';
+
+    h += '<div class="sh-lbl">Тарифы · авиа</div><table class="sh-tab">'
+      + tierRows(c.air.regular)
+      + (Array.isArray(c.air.brand) ? tierRows(c.air.brand, 'бренд') : '')
+      + (c.air.brand == null
+          ? '<tr><td>бренд</td><td>уточняется</td></tr>'
+          : (c.air.brand==='same' ? '<tr><td>бренд</td><td>= обычным</td></tr>' : ''))
+      + (c.air.extra||[]).map(x=>
+          '<tr><td>'+esc(x.label)+'</td><td>'+fmt(x.tiers[0].rate)+' $</td></tr>').join('')
+      + '</table>';
+
+    if (c.auto && c.auto.length){
+      h += '<div class="sh-lbl">Тарифы · авто</div><table class="sh-tab">'
+        + c.auto.map(a=>{
+            const price = a.onRequest ? 'по запросу'
+              : (a.regular ? fmt(rateFromTiers(a.regular, weight))+' $' : '—');
+            const label = (a.variant || 'авто') + ' · '
+              + (a.daysLabel || (a.days[0]+'–'+a.days[1]+' дн'));
+            return '<tr><td>'+esc(label)+'</td><td>'+esc(price)+'</td></tr>';
+          }).join('')
+        + '</table>';
+    }
+
+    h += block('Доставка', c.delivery
+      ? '<p class="sh-text">'+esc(c.delivery)+'</p>'
+      : '<p class="sh-none">нет данных</p>');
+
+    if ((c.limits||[]).length)
+      h += block('Ограничения', '<ul class="sh-list con">'+c.limits.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>');
+    if ((c.pros||[]).length)
+      h += block('Плюсы', '<ul class="sh-list pro">'+c.pros.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>');
+    if ((c.cons||[]).length)
+      h += block('Минусы', '<ul class="sh-list con">'+c.cons.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>');
+    if ((c.unknowns||[]).length)
+      h += block('Что уточняется', '<ul class="sh-list warn">'+c.unknowns.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>');
+
+    const ct = c.contacts || {};
+    const links = [];
+    if (ct.channel) links.push(tgLink(ct.channel, 'Канал ' + ct.channel));
+    if (ct.bot)     links.push(tgLink(ct.bot, 'Бот ' + ct.bot));
+    if (ct.admin)   links.push(tgLink(ct.admin, 'Админ ' + ct.admin));
+    if (ct.phone)   links.push('<a href="tel:'+esc(ct.phone.replace(/[^\d+]/g,''))+'">'+esc(ct.phone)+'</a>');
+    if (ct.site)    links.push('<a href="'+esc(ct.site)+'" target="_blank" rel="noopener">Сайт</a>');
+    h += block('Контакты', links.length
+      ? '<div class="sh-contacts">'+links.join('')+'</div>'
+      : '<p class="sh-none">уточняются</p>');
+
+    if (c.batchFormat)
+      h += block('Номера рейсов', '<p class="sh-text">'+esc(c.batchFormat)+'</p>');
+
+    return h;
+  }
+
+  function openSheet(id){
+    const c = DATA.find(x=>x.id===id);
+    if (!c) return;
+    lastFocus = document.activeElement;
+    sheetBody.innerHTML = sheetHtml(c);
+    sheet.classList.add('up');
+    scrim.classList.add('up');
+    document.body.style.overflow = 'hidden';
+    sheet.scrollTop = 0;
+    sheet.focus();
+    U.haptic('light');
+    if (tg && tg.BackButton){ try { tg.BackButton.show(); } catch(e){} }
+  }
+  function closeSheet(){
+    sheet.classList.remove('up');
+    scrim.classList.remove('up');
+    document.body.style.overflow = '';
+    if (tg && tg.BackButton){ try { tg.BackButton.hide(); } catch(e){} }
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  const isOpen = () => sheet.classList.contains('up');
+  window.__cargoCloseSheet = () => { if (isOpen()) closeSheet(); };
+
+  list.addEventListener('click', e=>{
+    const card = e.target.closest('.card[data-id]');
+    if (card) openSheet(card.dataset.id);
+  });
+  list.addEventListener('keydown', e=>{
+    if (e.key!=='Enter' && e.key!==' ') return;
+    const card = e.target.closest('.card[data-id]');
+    if (card){ e.preventDefault(); openSheet(card.dataset.id); }
+  });
+  document.addEventListener('click', e=>{
+    const row = e.target.closest('#tariff-body tr[data-id]');
+    if (row) openSheet(row.dataset.id);
+  });
+  scrim.addEventListener('click', closeSheet);
+  document.addEventListener('keydown', e=>{ if (e.key==='Escape' && isOpen()) closeSheet(); });
+  if (tg && tg.onEvent){ try { tg.onEvent('backButtonClicked', ()=>{ if (isOpen()) closeSheet(); }); } catch(e){} }
+
   // expose carriers for the tracker module (single source for the dropdown)
   window.__CARGO_CARRIERS = COMPANIES.map(c=>c.name);
   window.__CARGO_DATA = DATA;
@@ -823,6 +1076,7 @@
   const tabs = {}, views = {};
   ids.forEach(k=>{ tabs[k] = document.getElementById('tab-'+k); views[k] = document.getElementById('view-'+k); });
   function show(which){
+    if (window.__cargoCloseSheet) window.__cargoCloseSheet();
     ids.forEach(k=>{
       const on = k===which;
       views[k].hidden = !on;
