@@ -25,6 +25,7 @@ window.CARGO_CARRIERS = [
   {
     id: 'win',
     name: 'WIN',
+    tagline: 'Бренд по цене обычного, доставка по городу',
     updated: '2026-07',
     air: {
       days: [5, 7],
@@ -56,6 +57,7 @@ window.CARGO_CARRIERS = [
   {
     id: 'meest',
     name: 'MEEST',
+    tagline: 'Авто без лимитов или эконом за 6 $',
     updated: '2026-07',
     air: {
       days: [6, 12],
@@ -88,6 +90,7 @@ window.CARGO_CARRIERS = [
   {
     id: 'comfort',
     name: 'COMFORT',
+    tagline: 'Самый быстрый авиа, принимают от 100 г',
     updated: '2026-07',
     air: {
       days: [2, 6],
@@ -117,6 +120,7 @@ window.CARGO_CARRIERS = [
   {
     id: 'tujjor',
     name: 'TUJJOR',
+    tagline: 'Самое дешёвое авто, новые авиа-тарифы',
     updated: '2026-08',
     air: {
       days: [4, 7],
@@ -157,6 +161,7 @@ window.CARGO_CARRIERS = [
   {
     id: 'chin',
     name: 'CHIN',
+    tagline: 'Быстро и дёшево, есть офис в Ташкенте',
     updated: '2026-07',
     batchFormat: 'AV-24 (авиа) / AT-14 (авто)',
     air: {

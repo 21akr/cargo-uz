@@ -428,6 +428,7 @@
   .sh-list.pro li::before{content:"+";color:var(--green)}
   .sh-list.con li::before{content:"−";color:var(--red)}
   .sh-list.warn li::before{content:"?";color:var(--gold)}
+  .sh-list.plain li::before{content:"·";color:var(--mut)}
   .sh-text{font-size:12.5px;color:var(--ink);line-height:1.55}
   .sh-contacts{display:flex;flex-wrap:wrap;gap:8px}
   .sh-contacts a{
@@ -440,6 +441,34 @@
   .card:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
   #tariff-body tr{cursor:pointer}
   #tariff-body tr:hover td{color:var(--blue)}
+
+  /* ── список компаний в примечаниях ─────────────────── */
+  .co-list{list-style:none;margin:-2px 0 0}
+  .co-row{
+    display:block;padding:12px 2px;border-top:1px solid var(--line);
+    cursor:pointer;position:relative;
+  }
+  .co-list li:first-child .co-row{border-top:0}
+  .co-row:hover .co-nm,.co-row:focus-visible .co-nm{color:var(--blue)}
+  .co-row:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+  .co-head{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+  .co-nm{
+    font-family:'Oswald',sans-serif;font-weight:600;font-size:14.5px;
+    text-transform:uppercase;letter-spacing:.05em;color:var(--ink);
+  }
+  .co-upd{
+    margin-left:auto;font-family:'IBM Plex Mono',monospace;
+    font-size:10px;color:var(--mut);letter-spacing:.06em;white-space:nowrap;
+  }
+  .co-body{display:flex;align-items:center;gap:8px}
+  .co-sum{flex:1;font-size:12.5px;color:var(--mut);line-height:1.4}
+  .co-q{
+    flex:0 0 auto;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+    background:var(--bg-warn);color:var(--fg-warn);border-radius:4px;padding:2px 7px;
+  }
+  .co-go{flex:0 0 auto;color:var(--mut);font-size:14px;line-height:1}
+  .co-row:hover .co-go{color:var(--blue)}
+  .det-foot{font-size:12px;color:var(--mut);line-height:1.5;margin-top:14px}
 
   /* ── footnotes / table ─────────────────────────────── */
   details{
@@ -590,7 +619,7 @@
     </section>
 
     <details>
-      <summary>Примечания к тарифам</summary>
+      <summary>Компании</summary>
       <div class="det-body" id="notes-body"></div>
     </details>
 
@@ -601,7 +630,7 @@
           <thead><tr><th>Карго</th><th>Обычные</th><th>Бренд</th><th>Срок</th></tr></thead>
           <tbody id="tariff-body"></tbody>
         </table>
-        <p style="margin-top:8px">Стрелка → показывает снижение ставки при росте веса.</p>
+        <p style="margin-top:8px" id="tariff-foot">Стрелка → показывает снижение ставки при росте веса.</p>
       </div>
     </details>
   </div>
@@ -921,6 +950,15 @@
     if (tiers.length === 1) return fmt(tiers[0].rate) + '&nbsp;$';
     return fmt(tiers[0].rate) + ' → ' + fmt(tiers[tiers.length-1].rate) + '&nbsp;$';
   }
+  // '2026-07' → 'июль 2026'
+  function monthLabel(s){
+    const m = String(s||'').match(/^(\d{4})-(\d{2})$/);
+    if (!m) return s || '—';
+    const names = ['январь','февраль','март','апрель','май','июнь',
+                   'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    return (names[Number(m[2])-1] || m[2]) + ' ' + m[1];
+  }
+
   // Один список контактов на всё приложение — и для примечаний, и для шторки.
   function contactItems(ct){
     if (!ct) return [];
@@ -954,23 +992,34 @@
         + '<td class="num">'+c.air.days[0]+'–'+c.air.days[1]+' дн'+(c.air.daysNote?'*':'')+'</td></tr>';
     }).join('');
 
+    // Сноска про звёздочку живёт рядом с таблицей, а не в другом разделе.
+    const foot = document.getElementById('tariff-foot');
+    const starred = DATA.filter(c=>c.air.daysNote);
+    if (foot && starred.length){
+      foot.innerHTML = 'Стрелка → показывает снижение ставки при росте веса.<br>* '
+        + starred.map(c=> esc(c.name) + ' — ' + esc(c.air.daysNote)).join('; ') + '.';
+    }
+
+    // Раньше здесь была стена текста, дублировавшая карточку компании.
+    // Теперь — короткий указатель: строка на компанию, тап открывает карточку.
     const nb = document.getElementById('notes-body');
     if (!nb) return;
-    let html = DATA.map(c=>{
-      const bits = [];
-      (c.notes || []).forEach(n=> bits.push(esc(n)));
-      if (c.air.effectiveFrom) bits.push('Авиа-тарифы действуют с партии ' + esc(c.air.effectiveFrom) + '.');
-      if (c.delivery) bits.push('<b>Доставка:</b> ' + esc(c.delivery));
-      const ct = contactAnchors(c.contacts).join(', ');
-      bits.push('<b>Контакты:</b> ' + (ct || 'уточняются'));
-      if (c.contacts && c.contacts.note) bits.push(esc(c.contacts.note));
-      (c.unknowns || []).forEach(u=> bits.push('<b>Уточняется:</b> ' + esc(u)));
-      return '<p><b>'+esc(c.name)+'</b> · обновлено ' + esc(c.updated || '—') + '<br>' + bits.join('<br>') + '</p>';
-    }).join('');
-    const starred = DATA.filter(c=>c.air.daysNote);
-    if (starred.length) html += '<p>* ' + starred.map(c=> esc(c.name) + ' — ' + esc(c.air.daysNote)).join('; ') + '.</p>';
-    html += '<p>Сроки всех компаний считаются после прибытия товара на их склад. '
-         +  'Для авто-доставки отдельных брендовых тарифов компании не публикуют — расчёт по обычной ставке.</p>';
+    let html = '<ul class="co-list">' + DATA.map(c=>{
+      const q = (c.unknowns || []).length;
+      const sum = c.tagline || tiersLabel(c.air.regular) + ' · ' + c.air.days[0]+'–'+c.air.days[1]+' дн';
+      return '<li><div class="co-row" data-id="'+esc(c.id)+'" role="button" tabindex="0"'
+        + ' aria-label="'+esc(c.name+' — открыть карточку компании')+'">'
+        +   '<div class="co-head"><span class="co-nm">'+esc(c.name)+'</span>'
+        +     '<span class="co-upd">'+esc(monthLabel(c.updated))+'</span></div>'
+        +   '<div class="co-body"><span class="co-sum">'+sum+'</span>'
+        +     (q ? '<span class="co-q" title="открытых вопросов">?'+q+'</span>' : '')
+        +     '<span class="co-go" aria-hidden="true">›</span></div>'
+        + '</div></li>';
+    }).join('') + '</ul>';
+
+    html += '<p class="det-foot">Тап по компании — тарифы, доставка, контакты и что ещё уточняется. '
+         +  'Сроки у всех считаются после прибытия товара на их склад; '
+         +  'отдельных брендовых тарифов на авто компании не публикуют.</p>';
     nb.innerHTML = html;
   }
   renderReference();
@@ -1074,6 +1123,10 @@
         + '</table>';
     }
 
+    if ((c.notes||[]).length)
+      h += block('Примечания', '<ul class="sh-list plain">'
+        + c.notes.map(x=>'<li>'+esc(x)+'</li>').join('') + '</ul>');
+
     h += block('Доставка', c.delivery
       ? '<p class="sh-text">'+esc(c.delivery)+'</p>'
       : '<p class="sh-none">нет данных</p>');
@@ -1131,9 +1184,15 @@
     const card = e.target.closest('.card[data-id]');
     if (card){ e.preventDefault(); openSheet(card.dataset.id); }
   });
+  // Строка тарифной таблицы и строка в списке компаний — тоже вход в карточку.
   document.addEventListener('click', e=>{
-    const row = e.target.closest('#tariff-body tr[data-id]');
-    if (row) openSheet(row.dataset.id);
+    const el = e.target.closest('#tariff-body tr[data-id], .co-row[data-id]');
+    if (el) openSheet(el.dataset.id);
+  });
+  document.addEventListener('keydown', e=>{
+    if (e.key!=='Enter' && e.key!==' ') return;
+    const row = e.target.closest('.co-row[data-id]');
+    if (row){ e.preventDefault(); openSheet(row.dataset.id); }
   });
   scrim.addEventListener('click', closeSheet);
   document.addEventListener('keydown', e=>{ if (e.key==='Escape' && isOpen()) closeSheet(); });
