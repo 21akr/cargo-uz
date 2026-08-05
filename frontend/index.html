@@ -112,6 +112,27 @@
   }
   .sub{color:var(--mut);font-size:13.5px;margin-top:6px}
 
+  /* ── глобус ────────────────────────────────────────── */
+  .globe{display:flex;justify-content:center;margin:2px 0 0}
+  .globe svg{max-width:100%;height:auto}
+  .mer{transform-box:fill-box;transform-origin:center}
+  @media (prefers-reduced-motion:no-preference){
+    .mer{animation:spin 9s linear infinite}
+    @keyframes spin{
+      0%{transform:scaleX(1)}
+      25%{transform:scaleX(.02)}
+      50%{transform:scaleX(-1)}
+      75%{transform:scaleX(.02)}
+      100%{transform:scaleX(1)}
+    }
+  }
+  .globe-note{
+    text-align:center;font-family:'IBM Plex Mono',monospace;
+    font-size:11px;color:var(--mut);letter-spacing:.06em;
+    margin:0 0 14px;min-height:16px;
+  }
+  .globe-note b{color:var(--ink);font-weight:600}
+
   /* ── tabs ──────────────────────────────────────────── */
   .tabs{display:flex;gap:6px;margin:0 2px 16px}
   .tab{
@@ -411,6 +432,35 @@
 
   <!-- ══════════ ВИД: КАЛЬКУЛЯТОР ══════════ -->
   <div id="view-calc" role="tabpanel">
+    <div class="globe" aria-hidden="true">
+      <svg viewBox="-70 -76 140 128" width="168" height="154" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <g transform="rotate(-12)" fill="none" stroke="var(--blue)" stroke-width=".7" opacity=".5">
+          <circle r="50"/>
+          <ellipse cx="0" cy="-38" rx="32" ry="9"/>
+          <ellipse cx="0" cy="-20" rx="45" ry="12"/>
+          <ellipse cx="0" cy="0" rx="50" ry="14"/>
+          <ellipse cx="0" cy="20" rx="45" ry="12"/>
+          <ellipse cx="0" cy="38" rx="32" ry="9"/>
+          <ellipse class="mer" rx="50" ry="50"/>
+          <ellipse class="mer" rx="50" ry="50" style="animation-delay:-1.5s"/>
+          <ellipse class="mer" rx="50" ry="50" style="animation-delay:-3s"/>
+          <ellipse class="mer" rx="50" ry="50" style="animation-delay:-4.5s"/>
+          <ellipse class="mer" rx="50" ry="50" style="animation-delay:-6s"/>
+          <ellipse class="mer" rx="50" ry="50" style="animation-delay:-7.5s"/>
+        </g>
+        <path id="arc" d="M42 -16 Q 0 -72 -40 4" fill="none" stroke="var(--red)"
+              stroke-width="1.6" stroke-dasharray="4 4" opacity=".9"/>
+        <circle cx="42" cy="-16" r="3.4" fill="var(--blue)"/>
+        <circle cx="-40" cy="4" r="3.4" fill="var(--red)"/>
+        <path id="plane" d="M-5 -3.2 L5 0 L-5 3.2 L-2.6 0 Z" fill="var(--ink)">
+          <animateMotion dur="6s" repeatCount="indefinite" rotate="auto">
+            <mpath href="#arc" xlink:href="#arc"/>
+          </animateMotion>
+        </path>
+      </svg>
+    </div>
+    <p class="globe-note" id="globe-note"></p>
+
     <section class="calc" aria-label="Калькулятор">
       <div class="field">
         <label class="lbl" for="w">Вес посылки</label>
@@ -505,6 +555,7 @@
   </footer>
 </div>
 
+<script src="utils.js"></script>
 <script src="carriers.js"></script>
 <script>
 /* ════════════════ КАЛЬКУЛЯТОР + ТЕМА ════════════════ */
@@ -531,20 +582,9 @@
 
   // ── данные ───────────────────────────────────────────
   // Ни одной цифры здесь нет — всё приходит из carriers.js.
+  const U = window.CargoUtils;
   const DATA = window.CARGO_CARRIERS || [];
-
-  function esc(s){
-    return String(s==null?'':s).replace(/[&<>"']/g, c=>(
-      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-    ));
-  }
-
-  // tiers: [{to:10,rate:9.5},{to:null,rate:8.5}] → ставка для веса
-  function rateFromTiers(tiers, w){
-    if (!tiers || !tiers.length) return null;
-    for (const t of tiers){ if (t.to == null || w <= t.to) return t.rate; }
-    return tiers[tiers.length-1].rate;
-  }
+  const esc = U.esc, rateFromTiers = U.rateFromTiers;
 
   // Адаптер: данные → форма, которую ждёт калькулятор.
   const COMPANIES = DATA.map(c => ({
@@ -591,10 +631,15 @@
   const $ = s => document.querySelector(s);
   const list = $('#list');
   const modeNote = $('#mode-note');
+  const globeNote = $('#globe-note');
 
-  function fmt(n){
-    return n.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');
+  // При prefers-reduced-motion самолёт не летает (CSS так меридианы не крутит).
+  if (U.reducedMotion()){
+    const pl = $('#plane');
+    if (pl) pl.style.display = 'none';
   }
+
+  const fmt = U.fmt;
   function daysLabel(e){
     return e.daysLabel || (e.days[0]+'–'+e.days[1]+' дн');
   }
@@ -647,7 +692,16 @@
     modeNote.textContent = (mode==='air'?'✈ авиа':'🚚 авто') + ' · ' +
       (brand?'брендовый':'обычный') + ' · ' + fmt(weight) + ' кг';
 
-    list.innerHTML = entries.map(e=>{
+    // Подпись под глобусом: кто быстрее всех именно при текущих настройках.
+    // Из тех же entries, что и карточки, — разойтись не может.
+    const fastest = entries.filter(e=>!e.na)
+      .find(e=>(e.days[0]+e.days[1])/2===minAvgDays);
+    globeNote.innerHTML = fastest
+      ? 'быстрее всего · <b>' + esc(fastest.co + (fastest.variant?' '+fastest.variant:'')) + '</b> · '
+        + esc(fastest.daysLabel)
+      : 'нет доступных вариантов';
+
+    const html = entries.map(e=>{
       const isBest = e.total!=null && e.total===minPrice;
       const isFast = !e.na && (e.days[0]+e.days[1])/2===minAvgDays;
       const cls = ['card', isBest?'best':'', isFast?'fast':'', e.na?'na':''].join(' ').trim();
@@ -661,7 +715,7 @@
         ? '$'+fmt(e.total)
         : (e.na ? '<span class="cur">н/д</span>' : '<span class="cur">по запросу</span>');
 
-      return '<article class="'+cls+'">'
+      return '<article class="'+cls+'" data-key="'+esc(e.co+'|'+e.variant)+'">'
         + '<div class="top">'
         +   '<div class="co">'+e.co+(e.variant?' <span class="variant">'+e.variant+'</span>':'')+'</div>'
         +   '<div class="price">'+priceHtml+'</div>'
@@ -674,6 +728,9 @@
         + (e.note?'<p class="note">'+e.note+'</p>':'')
         + '</article>';
     }).join('');
+
+    // «Гонка цен»: карточки не перепрыгивают, а переезжают на новые места.
+    U.flip(list, '.card', ()=>{ list.innerHTML = html; });
   }
 
   // ── events ───────────────────────────────────────────
@@ -685,6 +742,7 @@
     b.addEventListener('click', ()=>{
       weight = parseFloat(b.dataset.w);
       $('#w').value = weight;
+      U.haptic('light');
       render();
     });
   });
@@ -692,6 +750,7 @@
     $('#'+onId).addEventListener('click', ()=>{
       $('#'+onId).classList.add('on');
       $('#'+offId).classList.remove('on');
+      U.haptic('light');
       fn(); render();
     });
   }
@@ -709,10 +768,7 @@
     if (tiers.length === 1) return fmt(tiers[0].rate) + '&nbsp;$';
     return fmt(tiers[0].rate) + ' → ' + fmt(tiers[tiers.length-1].rate) + '&nbsp;$';
   }
-  function tgLink(handle, label){
-    const h = String(handle).replace(/^@/,'');
-    return '<a href="https://t.me/'+esc(h)+'" target="_blank" rel="noopener">'+esc(label)+'</a>';
-  }
+  const tgLink = U.tgLink;
   function contactLine(ct){
     if (!ct) return '';
     const out = [];
@@ -789,12 +845,10 @@
    (защита от HTML-инъекций); на входе — validateBatchNo / validateParcel. */
 (function(){
   const KEY = 'cargo_parcels_v1';
-  // Backend URL: from window.CARGO_API_BASE or localStorage['cargo_api_base'].
-  // Empty → offline localStorage mode (v1). Set it → API mode (v2).
-  const API_BASE = (window.CARGO_API_BASE
-    || (function(){ try { return localStorage.getItem('cargo_api_base'); } catch(e){ return ''; } })()
-    || '').replace(/\/+$/,'');
-  const initData = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || '';
+  const U = window.CargoUtils;
+  // Пусто → офлайн-режим (localStorage, v1). Задан адрес → API-режим (v2).
+  const API_BASE = U.apiBase();
+  const initData = U.initData();
 
   const CARRIERS = (window.__CARGO_CARRIERS && window.__CARGO_CARRIERS.length)
     ? window.__CARGO_CARRIERS
@@ -814,21 +868,7 @@
 
   // ── helpers ──────────────────────────────────────────
   const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-  function fmt(n){ return n.toFixed(2).replace(/\.00$/,'').replace(/(\.\d)0$/,'$1'); }
-  function esc(s){
-    return String(s==null?'':s).replace(/[&<>"']/g, c=>(
-      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-    ));
-  }
-  // "215 avia" / "215-avia" → "215-AVIA" (тот же формат, что и на бэкенде)
-  function normBatch(input){
-    const s = String(input).trim();
-    let m = s.match(/(\d{1,4})\s*[-–—]?\s*(avia|avto)/i);        // 215-AVIA
-    if (m) return m[1] + '-' + m[2].toUpperCase();
-    m = s.match(/\b(av|at)\s*[-–—]?\s*(\d{1,4})\b/i);            // AV-24 / AT-14 (CHIN)
-    if (m) return m[1].toUpperCase() + '-' + m[2];
-    return s.toUpperCase();
-  }
+  const fmt = U.fmt, esc = U.esc, normBatch = U.normBatch;
 
   // ── валидация входных данных ──────────────────────────
   function validateBatchNo(s){
@@ -1063,30 +1103,16 @@
    Публичная лента из batch_status (общие данные каналов). Доступна только в
    API-режиме — в офлайне показываем подсказку. */
 (function(){
-  const API_BASE = (window.CARGO_API_BASE
-    || (function(){ try { return localStorage.getItem('cargo_api_base'); } catch(e){ return ''; } })()
-    || '').replace(/\/+$/,'');
-  const initData = (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) || '';
+  const U = window.CargoUtils;
+  const API_BASE = U.apiBase();
+  const initData = U.initData();
 
   const LABEL = { awaiting:'Ожидает', sorting:'Сортировка', airport:'В аэропорту',
                   transit:'В пути', arrived:'На складе в Узб', delivered:'Выдан' };
   const CLS   = { awaiting:'b-mut', sorting:'b-warn', airport:'b-blue',
                   transit:'b-blue', arrived:'b-green', delivered:'b-green' };
 
-  function esc(s){
-    return String(s==null?'':s).replace(/[&<>"']/g, c=>(
-      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-    ));
-  }
-  function ago(iso){
-    const t = new Date(iso).getTime();
-    if (!isFinite(t)) return '';
-    const s = Math.max(0, (Date.now() - t) / 1000);
-    if (s < 60)    return 'только что';
-    if (s < 3600)  return Math.floor(s/60)  + ' мин назад';
-    if (s < 86400) return Math.floor(s/3600) + ' ч назад';
-    return Math.floor(s/86400) + ' дн назад';
-  }
+  const esc = U.esc, ago = U.ago;
 
   const arrEl  = document.getElementById('board-arrivals');
   const listEl = document.getElementById('board-list');
