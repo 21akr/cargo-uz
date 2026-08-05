@@ -357,6 +357,8 @@
   .det-body{padding:2px 16px 16px;font-size:13px;color:var(--ink)}
   .det-body p{margin-bottom:9px;color:var(--mut)}
   .det-body p b{color:var(--ink)}
+  .det-body a{color:var(--blue);text-decoration:none;border-bottom:1px solid currentColor}
+  .det-body a:hover{opacity:.75}
   table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
   th,td{
     text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);
@@ -450,14 +452,7 @@
 
     <details>
       <summary>Примечания к тарифам</summary>
-      <div class="det-body">
-        <p><b>WIN:</b> цена за брендовые товары не отличается от обычных (подтверждено). Доставка по Ташкенту: до 5 кг — 25 000 сум, свыше 5 кг — бесплатно.</p>
-        <p><b>COMFORT:</b> срок авиа считается от прибытия товара на склад в Китае, путь до склада не входит. Авто — только от 10 кг, цена по запросу.</p>
-        <p><b>MEEST (авто-эконом 6&nbsp;$):</b> таможенный лимит 200&nbsp;$, не более 2 одинаковых товаров в посылке.</p>
-        <p><b>CHIN:</b> тариф на брендовые товары уточняется. Срок авто — 12–18 дней со дня отправки.</p>
-        <p><b>TUJJOR:</b> авто-почта — мелкие заказы, авто-карго — габаритные. Срок авто — от 10 до 15 дней, очень редко 20 дней от прибытия на склад.</p>
-        <p>Сроки всех компаний считаются после прибытия товара на их склад. Для авто-доставки отдельных брендовых тарифов компании не публикуют — расчёт по обычной ставке.</p>
-      </div>
+      <div class="det-body" id="notes-body"></div>
     </details>
 
     <details>
@@ -465,15 +460,9 @@
       <div class="det-body">
         <table>
           <thead><tr><th>Карго</th><th>Обычные</th><th>Бренд</th><th>Срок</th></tr></thead>
-          <tbody>
-            <tr><td>WIN</td><td class="num">9.5 → 8.8&nbsp;$</td><td class="num">= обычным</td><td class="num">5–7 дн</td></tr>
-            <tr><td>MEEST</td><td class="num">10&nbsp;$</td><td class="num">12&nbsp;$</td><td class="num">6–12 дн</td></tr>
-            <tr><td>COMFORT</td><td class="num">10 → 9&nbsp;$</td><td class="num">12 → 11&nbsp;$</td><td class="num">2–6 дн¹</td></tr>
-            <tr><td>TUJJOR</td><td class="num">9&nbsp;$</td><td class="num">11&nbsp;$</td><td class="num">4–7 дн</td></tr>
-            <tr><td>CHIN</td><td class="num">9.2&nbsp;$</td><td class="num">?</td><td class="num">3–5 дн</td></tr>
-          </tbody>
+          <tbody id="tariff-body"></tbody>
         </table>
-        <p style="margin-top:8px">Стрелка → показывает снижение ставки при росте веса. ¹ от прибытия на склад в Китае.</p>
+        <p style="margin-top:8px">Стрелка → показывает снижение ставки при росте веса.</p>
       </div>
     </details>
   </div>
@@ -512,10 +501,11 @@
   </div>
 
   <footer>
-    Тарифы обновлены: июль 2026 · цены могут меняться —<br>уточняйте у карго перед отправкой
+    Дата обновления — у каждой компании в примечаниях<br>цены могут меняться — уточняйте у карго перед отправкой
   </footer>
 </div>
 
+<script src="carriers.js"></script>
 <script>
 /* ════════════════ КАЛЬКУЛЯТОР + ТЕМА ════════════════ */
 (function(){
@@ -539,71 +529,61 @@
     apply(next); store(next);
   });
 
-  // ── tariff data ──────────────────────────────────────
-  // air: rate(weight, brand) -> $/kg or null if unknown
-  const COMPANIES = [
-    {
-      id:'win', name:'WIN',
-      air:{
-        days:[5,7],
-        rate:(w,br)=> w<=10 ? 9.5 : (w<=30 ? 9.2 : 8.8), // brand = same
-        note:(w,br)=> w<=5
-          ? '+ 25 000 сум доставка по Ташкенту (свыше 5 кг — бесплатно)'
-          : 'Доставка по Узбекистану — бесплатно',
-        badges:(w,br)=> br ? [{t:'Бренд без наценки',c:'b-green'}] : []
+  // ── данные ───────────────────────────────────────────
+  // Ни одной цифры здесь нет — всё приходит из carriers.js.
+  const DATA = window.CARGO_CARRIERS || [];
+
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c=>(
+      {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+    ));
+  }
+
+  // tiers: [{to:10,rate:9.5},{to:null,rate:8.5}] → ставка для веса
+  function rateFromTiers(tiers, w){
+    if (!tiers || !tiers.length) return null;
+    for (const t of tiers){ if (t.to == null || w <= t.to) return t.rate; }
+    return tiers[tiers.length-1].rate;
+  }
+
+  // Адаптер: данные → форма, которую ждёт калькулятор.
+  const COMPANIES = DATA.map(c => ({
+    id: c.id, name: c.name, src: c,
+    air: {
+      days: c.air.days,
+      rate: (w, br) => {
+        if (!br) return rateFromTiers(c.air.regular, w);
+        if (c.air.brand === 'same') return rateFromTiers(c.air.regular, w);
+        return rateFromTiers(c.air.brand, w);          // null → цена неизвестна
       },
-      auto:[{v:'', days:[15,18], rate:()=>7, note:null}]
+      note: (w, br) => {
+        const out = [];
+        if (br && c.air.brand == null) out.push('Тариф на брендовые товары уточняется');
+        if (c.air.daysNote) out.push('Срок — ' + c.air.daysNote);
+        return out.length ? out.join(' · ') : null;
+      },
+      badges: (w, br) => (br && c.air.brand === 'same')
+        ? [{ t:'Бренд без наценки', c:'b-green' }] : []
     },
-    {
-      id:'meest', name:'MEEST',
-      air:{
-        days:[6,12],
-        rate:(w,br)=> br ? 12 : 10,
-        note:()=> null,
-        badges:()=>[]
-      },
-      auto:[
-        {v:'стандарт', days:[18,20], rate:()=>9, note:'Без лимитов по количеству и сумме · заявлено: без задержек на таможне'},
-        {v:'эконом', days:[30,35], rate:()=>6, note:'Лимит 200 $ · не более 2 одинаковых товаров'}
-      ]
-    },
-    {
-      id:'comfort', name:'COMFORT',
-      air:{
-        days:[2,6],
-        rate:(w,br)=> br
-          ? (w<10 ? 12 : (w<50 ? 11.5 : 11))
-          : (w<=20 ? 10 : (w<=50 ? 9.5 : 9)),
-        note:()=> 'Срок — от прибытия товара на склад в Китае',
-        badges:()=>[]
-      },
-      auto:[{v:'', days:[10,18], rate:(w)=> w>=10 ? NaN : null, minW:10,
-             note:'Только от 10 кг · цена по запросу'}]
-    },
-    {
-      id:'tujjor', name:'TUJJOR',
-      air:{
-        days:[4,7],
-        rate:(w,br)=> br ? 11 : 9,
-        note:()=> null,
-        badges:()=>[]
-      },
-      auto:[
-        {v:'почта', days:[10,15], daysLabel:'10–15 дн', rate:()=>5.49, note:'Для мелких заказов · обычно 10–15 дн, в ~10% случаев до 20 · срок от прибытия на склад'},
-        {v:'карго', days:[10,15], daysLabel:'10–15 дн', rate:()=>6, note:'Для габаритных товаров · обычно 10–15 дн, в ~10% случаев до 20 · срок от прибытия на склад'}
-      ]
-    },
-    {
-      id:'chin', name:'CHIN',
-      air:{
-        days:[3,5],
-        rate:(w,br)=> br ? null : 9.2, // brand unknown
-        note:(w,br)=> br ? 'Тариф на брендовые товары уточняется' : null,
-        badges:()=>[]
-      },
-      auto:[{v:'', days:[12,18], daysLabel:'12–18 дн', rate:()=>5.5, note:'Срок — со дня отправки'}]
-    }
-  ];
+    auto: (c.auto || []).map(a => ({
+      v: a.variant || '',
+      days: a.days,
+      daysLabel: a.daysLabel,
+      rate: (w) => a.onRequest ? NaN : rateFromTiers(a.regular, w),
+      note: a.note || null,
+      minW: a.minWeight
+    }))
+  }));
+
+  // Проверка целостности данных — скажет, чего не хватает у новой компании.
+  DATA.forEach(c=>{
+    const miss = [];
+    if (!c.name) miss.push('name');
+    if (!c.air || !c.air.days) miss.push('air.days');
+    if (!c.air || !c.air.regular) miss.push('air.regular');
+    if (!c.updated) miss.push('updated');
+    if (miss.length) console.warn('[carriers.js] ' + (c.id||'?') + ': нет полей — ' + miss.join(', '));
+  });
 
   // ── state ────────────────────────────────────────────
   let weight = 1, brand = false, mode = 'air';
@@ -722,8 +702,63 @@
 
   render();
 
+  // ── справочник: таблица тарифов и примечания ──────────
+  // Тоже строится из данных, поэтому разойтись с расчётом не может.
+  function tiersLabel(tiers){
+    if (!tiers || !tiers.length) return '—';
+    if (tiers.length === 1) return fmt(tiers[0].rate) + '&nbsp;$';
+    return fmt(tiers[0].rate) + ' → ' + fmt(tiers[tiers.length-1].rate) + '&nbsp;$';
+  }
+  function tgLink(handle, label){
+    const h = String(handle).replace(/^@/,'');
+    return '<a href="https://t.me/'+esc(h)+'" target="_blank" rel="noopener">'+esc(label)+'</a>';
+  }
+  function contactLine(ct){
+    if (!ct) return '';
+    const out = [];
+    if (ct.channel) out.push(tgLink(ct.channel, 'канал ' + ct.channel));
+    if (ct.bot)     out.push(tgLink(ct.bot, 'бот ' + ct.bot));
+    if (ct.admin)   out.push(tgLink(ct.admin, 'админ ' + ct.admin));
+    if (ct.phone)   out.push('<a href="tel:'+esc(ct.phone.replace(/[^\d+]/g,''))+'">'+esc(ct.phone)+'</a>');
+    if (ct.site)    out.push('<a href="'+esc(ct.site)+'" target="_blank" rel="noopener">сайт</a>');
+    return out.join(', ');
+  }
+
+  function renderReference(){
+    const tb = document.getElementById('tariff-body');
+    if (tb) tb.innerHTML = DATA.map(c=>{
+      const brand = c.air.brand === 'same' ? '= обычным'
+        : c.air.brand == null ? 'уточняется'
+        : tiersLabel(c.air.brand);
+      return '<tr><td>'+esc(c.name)+'</td>'
+        + '<td class="num">'+tiersLabel(c.air.regular)+'</td>'
+        + '<td class="num">'+brand+'</td>'
+        + '<td class="num">'+c.air.days[0]+'–'+c.air.days[1]+' дн'+(c.air.daysNote?'*':'')+'</td></tr>';
+    }).join('');
+
+    const nb = document.getElementById('notes-body');
+    if (!nb) return;
+    let html = DATA.map(c=>{
+      const bits = [];
+      (c.notes || []).forEach(n=> bits.push(esc(n)));
+      if (c.air.effectiveFrom) bits.push('Авиа-тарифы действуют с партии ' + esc(c.air.effectiveFrom) + '.');
+      if (c.delivery) bits.push('<b>Доставка:</b> ' + esc(c.delivery));
+      const ct = contactLine(c.contacts);
+      bits.push('<b>Контакты:</b> ' + (ct || 'уточняются'));
+      (c.unknowns || []).forEach(u=> bits.push('<b>Уточняется:</b> ' + esc(u)));
+      return '<p><b>'+esc(c.name)+'</b> · обновлено ' + esc(c.updated || '—') + '<br>' + bits.join('<br>') + '</p>';
+    }).join('');
+    const starred = DATA.filter(c=>c.air.daysNote);
+    if (starred.length) html += '<p>* ' + starred.map(c=> esc(c.name) + ' — ' + esc(c.air.daysNote)).join('; ') + '.</p>';
+    html += '<p>Сроки всех компаний считаются после прибытия товара на их склад. '
+         +  'Для авто-доставки отдельных брендовых тарифов компании не публикуют — расчёт по обычной ставке.</p>';
+    nb.innerHTML = html;
+  }
+  renderReference();
+
   // expose carriers for the tracker module (single source for the dropdown)
   window.__CARGO_CARRIERS = COMPANIES.map(c=>c.name);
+  window.__CARGO_DATA = DATA;
 })();
 
 /* ════════════════ ТАБЫ ════════════════ */
