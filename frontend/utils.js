@@ -20,6 +20,23 @@ window.CargoUtils = (function () {
     return Number(n).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
   }
 
+  // На узбекской/русской цифровой клавиатуре точки нет — только запятая.
+  // Принимаем оба разделителя, иначе «1,5 кг» ввести невозможно.
+  function parseNum(s) {
+    if (typeof s === 'number') return s;
+    const t = String(s == null ? '' : s).replace(/[^\d.,-]/g, '').replace(/,/g, '.');
+    if (t === '' || t === '.' || t === '-') return NaN;
+    return parseFloat(t);
+  }
+
+  // Сумма в сумах — округляем, чтобы не было ложной точности.
+  function uzs(usd, rate) {
+    if (!rate || !isFinite(usd)) return null;
+    const v = usd * rate;
+    const r = v >= 10000 ? Math.round(v / 1000) * 1000 : Math.round(v / 100) * 100;
+    return r.toLocaleString('ru-RU') + ' сум';
+  }
+
   /* ── тарифы ─────────────────────────────────────────────────────── */
 
   // tiers: [{to:10,rate:9.5},{to:45,rate:9},{to:null,rate:8.5}] → ставка
@@ -102,9 +119,15 @@ window.CargoUtils = (function () {
     renderFn();
 
     const moved = [];
+    let fresh = 0;
     container.querySelectorAll(selector).forEach(n => {
       const prev = first.get(n.dataset.key);
-      if (prev == null) return;
+      // Новых карточек раньше не было — их не двигаем, а проявляем каскадом.
+      if (prev == null) {
+        n.classList.add('flip-enter');
+        n.style.animationDelay = (fresh++ * 45) + 'ms';
+        return;
+      }
       const delta = prev - n.getBoundingClientRect().top;
       if (!delta) return;
       n.style.transition = 'none';
@@ -123,5 +146,6 @@ window.CargoUtils = (function () {
     });
   }
 
-  return { esc, fmt, rateFromTiers, normBatch, ago, apiBase, initData, haptic, tgLink, reducedMotion, flip };
+  return { esc, fmt, parseNum, uzs, rateFromTiers, normBatch, ago,
+           apiBase, initData, haptic, tgLink, reducedMotion, flip };
 })();

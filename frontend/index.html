@@ -162,7 +162,7 @@
     margin-bottom:7px;
   }
   .weight-row{display:flex;align-items:center;gap:10px}
-  input[type=number]{
+  .w-input{
     flex:1;
     font-family:'IBM Plex Mono',monospace;
     font-size:22px;font-weight:600;color:var(--ink);
@@ -170,7 +170,8 @@
     padding:9px 12px;width:100%;
     background:var(--input);
   }
-  input[type=number]:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:transparent}
+  .w-input:focus{outline:2px solid var(--blue);outline-offset:1px;border-color:transparent}
+  .w-input.bad{border-color:var(--red)}
   .kg{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--mut);font-size:15px}
   .chips{display:flex;gap:8px;flex-wrap:wrap}
   .quick{display:flex;gap:6px;margin-top:8px}
@@ -250,6 +251,14 @@
     text-align:right;white-space:nowrap;
   }
   .price .cur{font-size:13px;color:var(--mut);font-weight:500}
+  .price .uzs{
+    display:block;font-size:11px;font-weight:500;color:var(--mut);
+    letter-spacing:.02em;margin-top:2px;
+  }
+  .rate-note{
+    font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--mut);
+    letter-spacing:.05em;text-align:right;margin:2px 2px 0;line-height:1.5;
+  }
   .meta{
     display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;
     font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--mut);
@@ -510,8 +519,36 @@
     h1{font-size:26px}
     .price{font-size:19px}
   }
+  /* ── плавность ─────────────────────────────────────── */
   @media (prefers-reduced-motion:no-preference){
     .card{transition:transform .12s ease}
+
+    /* новые карточки в списке проявляются каскадом (задержку ставит utils.flip) */
+    .flip-enter{animation:cardIn .34s cubic-bezier(.22,1,.36,1) both}
+    @keyframes cardIn{
+      from{opacity:0;transform:translateY(10px)}
+      to{opacity:1;transform:none}
+    }
+
+    /* раскрытие «Компании» и «Все тарифы» */
+    details[open] .det-body{animation:revealIn .3s ease both}
+    @keyframes revealIn{
+      from{opacity:0;transform:translateY(-6px)}
+      to{opacity:1;transform:none}
+    }
+
+    /* переключение вкладок */
+    .view-in{animation:viewIn .26s ease both}
+    @keyframes viewIn{
+      from{opacity:0;transform:translateY(8px)}
+      to{opacity:1;transform:none}
+    }
+
+    /* строки в списке компаний и в трекере */
+    .co-row,.prow,.board-row{transition:background-color .18s ease}
+    .co-row:hover,.board-row:hover{background:var(--input)}
+    .badge{animation:badgeIn .26s ease both}
+    @keyframes badgeIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
   }
 </style>
 </head>
@@ -574,7 +611,8 @@
       <div class="field">
         <label class="lbl" for="w">Вес посылки</label>
         <div class="weight-row">
-          <input type="number" id="w" value="1" min="0.1" step="0.1" inputmode="decimal">
+          <input type="text" id="w" class="w-input" value="1" inputmode="decimal"
+                 autocomplete="off" enterkeyhint="done">
           <span class="kg">кг</span>
         </div>
         <div class="quick">
@@ -616,6 +654,7 @@
         <span class="mode-note" id="mode-note"></span>
       </div>
       <div id="list"></div>
+      <p class="rate-note" id="rate-note"></p>
     </section>
 
     <details>
@@ -718,6 +757,7 @@
   // Ни одной цифры здесь нет — всё приходит из carriers.js.
   const U = window.CargoUtils;
   const DATA = window.CARGO_CARRIERS || [];
+  const CUR = window.CARGO_CURRENCY || { usdToUzs: null, updated: null };
   const esc = U.esc, rateFromTiers = U.rateFromTiers;
 
   // Адаптер: данные → форма, которую ждёт калькулятор.
@@ -877,8 +917,9 @@
       for (const b of (e.badges||[])) badges.push('<span class="badge '+b.c+'">'+b.t+'</span>');
       if (e.priceUnknown) badges.push('<span class="badge b-warn">Цена по запросу</span>');
 
+      const inUzs = e.total!=null ? U.uzs(e.total, CUR.usdToUzs) : null;
       const priceHtml = e.total!=null
-        ? '$'+fmt(e.total)
+        ? '$'+fmt(e.total) + (inUzs ? '<span class="uzs">≈ '+esc(inUzs)+'</span>' : '')
         : (e.na ? '<span class="cur">н/д</span>' : '<span class="cur">по запросу</span>');
 
       return '<article class="'+cls+'" data-key="'+esc(e.co+'|'+e.variant)+'"'
@@ -905,9 +946,20 @@
   }
 
   // ── events ───────────────────────────────────────────
-  $('#w').addEventListener('input', e=>{
-    const v = parseFloat(e.target.value);
-    if (!isNaN(v) && v>0){ weight=v; render(); }
+  // Ввод не перезаписываем на лету: «1,» в процессе набора должно остаться «1,».
+  const wInput = $('#w');
+  wInput.addEventListener('input', e=>{
+    const v = U.parseNum(e.target.value);
+    const ok = !isNaN(v) && v > 0;
+    e.target.classList.toggle('bad', e.target.value.trim() !== '' && !ok);
+    if (ok){ weight = v; render(); }
+  });
+  // На выходе из поля приводим к нормальному виду и не даём остаться пустым.
+  wInput.addEventListener('blur', ()=>{
+    const v = U.parseNum(wInput.value);
+    if (isNaN(v) || v <= 0){ wInput.value = fmt(weight); }
+    else { weight = v; wInput.value = fmt(v); render(); }
+    wInput.classList.remove('bad');
   });
   document.querySelectorAll('.quick button').forEach(b=>{
     b.addEventListener('click', ()=>{
@@ -1022,6 +1074,23 @@
          +  'отдельных брендовых тарифов на авто компании не публикуют.</p>';
     nb.innerHTML = html;
   }
+  // Курс всегда показываем вместе с суммами — пересчёт приблизительный,
+  // и пользователь должен видеть, по какому курсу и насколько он свежий.
+  (function(){
+    const el = document.getElementById('rate-note');
+    if (!el) return;
+    if (!CUR.usdToUzs){ el.textContent = ''; return; }
+    el.textContent = 'суммы в сумах — примерные · курс ≈ '
+      + CUR.usdToUzs.toLocaleString('ru-RU') + ' сум за $1'
+      + (CUR.updated ? ' · ' + monthLabel(CUR.updated) : '');
+
+    const m = String(CUR.updated||'').match(/^(\d{4})-(\d{2})$/);
+    if (m){
+      const age = (new Date().getFullYear()-Number(m[1]))*12 + (new Date().getMonth()+1-Number(m[2]));
+      if (age > 3) console.warn('[carriers.js] курс доллара не обновлялся ' + age + ' мес. — проверь CARGO_CURRENCY');
+    }
+  })();
+
   renderReference();
 
   /* ── карточка компании ────────────────────────────────
@@ -1216,6 +1285,11 @@
       tabs[k].classList.toggle('on', on);
       tabs[k].setAttribute('aria-selected', on ? 'true' : 'false');
     });
+    // перезапускаем анимацию появления вкладки
+    const v = views[which];
+    v.classList.remove('view-in');
+    void v.offsetWidth;
+    v.classList.add('view-in');
   }
   ids.forEach(k=> tabs[k].addEventListener('click', ()=>show(k)));
 })();
