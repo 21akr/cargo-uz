@@ -761,16 +761,28 @@
   const CUR = window.CARGO_CURRENCY || { usdToUzs: null, updated: null };
   const esc = U.esc, rateFromTiers = U.rateFromTiers;
 
+  // Брендовая шкала в одном месте: 'same' → как обычная, {plus:N} → обычная +N,
+  // массив → своя, null → неизвестно. Форму {plus} считаем на лету, поэтому
+  // при смене обычных тарифов брендовые не могут отстать.
+  function brandTiers(air){
+    if (!air) return null;
+    if (air.brand === 'same') return air.regular;
+    if (Array.isArray(air.brand)) return air.brand;
+    if (air.brand && typeof air.brand.plus === 'number'){
+      return (air.regular || []).map(t=>({
+        to: t.to, rate: Math.round((t.rate + air.brand.plus) * 100) / 100
+      }));
+    }
+    return null;
+  }
+
   // Адаптер: данные → форма, которую ждёт калькулятор.
   const COMPANIES = DATA.map(c => ({
     id: c.id, name: c.name, src: c,
     air: {
       days: c.air.days,
-      rate: (w, br) => {
-        if (!br) return rateFromTiers(c.air.regular, w);
-        if (c.air.brand === 'same') return rateFromTiers(c.air.regular, w);
-        return rateFromTiers(c.air.brand, w);          // null → цена неизвестна
-      },
+      rate: (w, br) => rateFromTiers(
+        br ? brandTiers(c.air) : c.air.regular, w),   // null → цена неизвестна
       note: (w, br) => {
         const out = [];
         if (br && c.air.brand == null) out.push('Тариф на брендовые товары уточняется');
@@ -1038,7 +1050,7 @@
     if (tb) tb.innerHTML = DATA.map(c=>{
       const brand = c.air.brand === 'same' ? '= обычным'
         : c.air.brand == null ? 'уточняется'
-        : tiersLabel(c.air.brand);
+        : tiersLabel(brandTiers(c.air));
       return '<tr data-id="'+esc(c.id)+'"><td>'+esc(c.name)+'</td>'
         + '<td class="num">'+tiersLabel(c.air.regular)+'</td>'
         + '<td class="num">'+brand+'</td>'
@@ -1119,10 +1131,13 @@
 
     let brandV = null, brandT = 'нет данных';
     if (c.air.brand === 'same'){ brandV = 100; brandT = 'без наценки'; }
-    else if (Array.isArray(c.air.brand)){
-      const diff = rateFromTiers(c.air.brand, weight) - (r||0);
-      brandV = Math.max(25, Math.round(100 - diff*25));
-      brandT = '+' + fmt(diff) + ' $/кг';
+    else {
+      const bt = brandTiers(c.air);
+      if (bt && r != null){
+        const diff = rateFromTiers(bt, weight) - r;
+        brandV = Math.max(25, Math.round(100 - diff*25));
+        brandT = '+' + fmt(diff) + ' $/кг';
+      }
     }
     const rel = typeof c.reliability === 'number' ? c.reliability : null;
 
@@ -1155,7 +1170,7 @@
 
   function sheetHtml(c){
     let h = '<div class="sh-top"><span class="sh-name" id="sh-name">'+esc(c.name)+'</span>'
-          + '<span class="sh-upd">ОБНОВЛЕНО '+esc(c.updated||'—')+'</span></div>';
+          + '<span class="sh-upd">ОБНОВЛЕНО '+esc(monthLabel(c.updated))+'</span></div>';
 
     const tags = [];
     if (c.air.brand === 'same') tags.push('<span class="badge b-green">Бренд без наценки</span>');
@@ -1173,10 +1188,9 @@
 
     h += '<div class="sh-lbl">Тарифы · авиа</div><table class="sh-tab">'
       + tierRows(c.air.regular)
-      + (Array.isArray(c.air.brand) ? tierRows(c.air.brand, 'бренд') : '')
-      + (c.air.brand == null
-          ? '<tr><td>бренд</td><td>уточняется</td></tr>'
-          : (c.air.brand==='same' ? '<tr><td>бренд</td><td>= обычным</td></tr>' : ''))
+      + (c.air.brand === 'same' ? '<tr><td>бренд</td><td>= обычным</td></tr>'
+         : c.air.brand == null ? '<tr><td>бренд</td><td>уточняется</td></tr>'
+         : tierRows(brandTiers(c.air), 'бренд'))
       + (c.air.extra||[]).map(x=>
           '<tr><td>'+esc(x.label)+'</td><td>'+fmt(x.tiers[0].rate)+' $</td></tr>').join('')
       + '</table>';
