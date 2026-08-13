@@ -431,6 +431,7 @@
   .sh-tab td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top}
   .sh-tab td:first-child{color:var(--mut)}
   .sh-tab td:last-child{text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--ink);white-space:nowrap}
+  .sh-sub{display:block;font-size:11px;color:var(--mut);margin-top:2px}
   .sh-list{list-style:none;font-size:12.5px;line-height:1.55}
   .sh-list li{padding-left:16px;position:relative;margin-bottom:5px;color:var(--ink)}
   .sh-list li::before{position:absolute;left:0;font-family:'IBM Plex Mono',monospace;font-weight:600}
@@ -1187,7 +1188,9 @@
               : (a.regular ? fmt(rateFromTiers(a.regular, weight))+' $' : '—');
             const label = (a.variant || 'авто') + ' · '
               + (a.daysLabel || (a.days[0]+'–'+a.days[1]+' дн'));
-            return '<tr><td>'+esc(label)+'</td><td>'+esc(price)+'</td></tr>';
+            return '<tr><td>'+esc(label)
+              + (a.dispatch ? '<span class="sh-sub">'+esc(a.dispatch)+'</span>' : '')
+              + '</td><td>'+esc(price)+'</td></tr>';
           }).join('')
         + '</table>';
     }
