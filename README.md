@@ -1,7 +1,7 @@
 # cargo-uz
 
 Tariff comparison + parcel tracking for the **China → Uzbekistan** cargo route.
-Compares 5 carriers (WIN, MEEST, COMFORT, TUJJOR, CHIN), calculates a parcel's
+Compares 4 carriers (WIN, COMFORT, TUJJOR, CHIN), calculates a parcel's
 price, and lets a user track their own shipments. Works as a normal website **and**
 as a Telegram Mini App. Russian UI.
 

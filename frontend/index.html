@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Карго-калькулятор · Китай → Узбекистан</title>
-<meta name="description" content="Сравнение тарифов карго-компаний Китай → Узбекистан: WIN, MEEST, COMFORT, TUJJOR, CHIN. Калькулятор стоимости доставки и трекинг посылок.">
+<meta name="description" content="Сравнение тарифов карго-компаний Китай → Узбекистан: WIN, COMFORT, TUJJOR, CHIN. Калькулятор стоимости доставки и трекинг посылок.">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -240,6 +240,9 @@
   .card.fast::before{background:var(--blue)}
   .card.best.fast::before{background:linear-gradient(180deg,var(--green) 50%,var(--blue) 50%)}
   .card.na{opacity:.62}
+  .card.flop{opacity:.55}
+  .card.flop::before{background:var(--red)}
+  .b-red{background:var(--bg-warn);color:var(--red)}
   .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
   .co{
     font-family:'Oswald',sans-serif;font-weight:600;font-size:16.5px;
@@ -757,7 +760,9 @@
   // ── данные ───────────────────────────────────────────
   // Ни одной цифры здесь нет — всё приходит из carriers.js.
   const U = window.CargoUtils;
-  const DATA = window.CARGO_CARRIERS || [];
+  // Порядок везде: rank 'top' → остальные → rank 'bottom'.
+  const rankIdx = c => c.rank==='top' ? 0 : c.rank==='bottom' ? 2 : 1;
+  const DATA = (window.CARGO_CARRIERS || []).slice().sort((a,b)=>rankIdx(a)-rankIdx(b));
   const CUR = window.CARGO_CURRENCY || { usdToUzs: null, updated: null };
   const esc = U.esc, rateFromTiers = U.rateFromTiers;
 
@@ -894,13 +899,19 @@
     });
     const hidden = total - entries.length;
 
-    const priced = entries.filter(e=>e.total!=null);
+    // rank из carriers.js: 'top' — всегда первым, 'bottom' — всегда последним
+    // и в «лучшую цену» / «самый быстрый» не попадает.
+    const rankOf = e => { const r = byId[e.id] && byId[e.id].rank; return r==='top' ? 0 : r==='bottom' ? 2 : 1; };
+    const ranked = entries.filter(e=>rankOf(e)!==2);
+    const priced = ranked.filter(e=>e.total!=null);
     const minPrice = priced.length ? Math.min(...priced.map(e=>e.total)) : null;
-    const minAvgDays = entries.filter(e=>!e.na).length
-      ? Math.min(...entries.filter(e=>!e.na).map(e=>(e.days[0]+e.days[1])/2))
+    const minAvgDays = ranked.filter(e=>!e.na).length
+      ? Math.min(...ranked.filter(e=>!e.na).map(e=>(e.days[0]+e.days[1])/2))
       : null;
 
     entries.sort((a,b)=>{
+      const ra = rankOf(a), rb = rankOf(b);
+      if (ra!==rb) return ra-rb;
       if (a.total==null && b.total==null) return 0;
       if (a.total==null) return 1;
       if (b.total==null) return -1;
@@ -913,7 +924,7 @@
 
     // Подпись под глобусом: кто быстрее всех именно при текущих настройках.
     // Из тех же entries, что и карточки, — разойтись не может.
-    const fastest = entries.filter(e=>!e.na)
+    const fastest = ranked.filter(e=>!e.na)
       .find(e=>(e.days[0]+e.days[1])/2===minAvgDays);
     globeNote.innerHTML = fastest
       ? 'быстрее всего · <b>' + esc(fastest.co + (fastest.variant?' '+fastest.variant:'')) + '</b> · '
@@ -921,10 +932,13 @@
       : 'нет подходящих вариантов';
 
     const html = entries.map(e=>{
-      const isBest = e.total!=null && e.total===minPrice;
-      const isFast = !e.na && (e.days[0]+e.days[1])/2===minAvgDays;
-      const cls = ['card', isBest?'best':'', isFast?'fast':'', e.na?'na':''].join(' ').trim();
+      const rk = rankOf(e);
+      const isBest = rk!==2 && e.total!=null && e.total===minPrice;
+      const isFast = rk!==2 && !e.na && (e.days[0]+e.days[1])/2===minAvgDays;
+      const cls = ['card', isBest?'best':'', isFast?'fast':'', e.na?'na':'', rk===2?'flop':''].join(' ').trim();
       const badges = [];
+      if (rk===0) badges.push('<span class="badge b-green">★ Рекомендуем</span>');
+      if (rk===2) badges.push('<span class="badge b-red">✕ Не рекомендуем</span>');
       if (isBest) badges.push('<span class="badge b-green">Лучшая цена</span>');
       if (isFast) badges.push('<span class="badge b-blue">Самый быстрый</span>');
       for (const b of (e.badges||[])) badges.push('<span class="badge '+b.c+'">'+b.t+'</span>');
@@ -1173,10 +1187,13 @@
           + '<span class="sh-upd">ОБНОВЛЕНО '+esc(monthLabel(c.updated))+'</span></div>';
 
     const tags = [];
+    if (c.rank === 'top')    tags.push('<span class="badge b-green">★ Рекомендуем</span>');
+    if (c.rank === 'bottom') tags.push('<span class="badge b-red">✕ Не рекомендуем</span>');
     if (c.air.brand === 'same') tags.push('<span class="badge b-green">Бренд без наценки</span>');
     if (c.air.flights) tags.push('<span class="badge b-blue">'+esc(c.air.flights)+'</span>');
     if (c.air.effectiveFrom) tags.push('<span class="badge b-warn">тариф с '+esc(c.air.effectiveFrom)+'</span>');
     if (tags.length) h += '<div class="badges" style="margin-top:10px">'+tags.join('')+'</div>';
+    if (c.rankNote) h += '<p class="sh-text" style="margin-top:9px">'+esc(c.rankNote)+'</p>';
 
     h += '<div class="sh-lbl">Оценка редакции</div><div class="sh-score">'
       + scoreRows(c).map(s=>
@@ -1330,7 +1347,7 @@
 
   const CARRIERS = (window.__CARGO_CARRIERS && window.__CARGO_CARRIERS.length)
     ? window.__CARGO_CARRIERS
-    : ['TUJJOR','MEEST','COMFORT','WIN','CHIN'];
+    : ['CHIN','WIN','COMFORT','TUJJOR'];
 
   // Статусы = enum авто-парсинга каналов (в v2 приходят с сервера)
   const STATUSES = [

@@ -117,7 +117,7 @@ cd backend
 fly launch --no-deploy          # creates fly.toml (internal port 3000)
 fly secrets set DATABASE_URL=... TELEGRAM_BOT_TOKEN=... \
   TG_API_ID=... TG_API_HASH=... TG_SESSION=... \
-  INGEST_CHANNELS='WIN=@win_channel,MEEST=@...' \
+  INGEST_CHANNELS='WIN=@win_channel,CHIN=@...' \
   CORS_ORIGINS='https://cargo-uz.vercel.app'
 fly deploy
 fly run npx prisma migrate deploy   # run migrations once against the prod DB

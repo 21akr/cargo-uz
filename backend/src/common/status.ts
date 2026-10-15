@@ -1,7 +1,7 @@
 // Single source of truth for the status vocabulary, shared by the parser,
 // notifier and DTO validation. Names MUST match the Prisma enums.
 
-export const CARRIERS = ['WIN', 'MEEST', 'COMFORT', 'TUJJOR', 'CHIN'] as const;
+export const CARRIERS = ['WIN', 'COMFORT', 'TUJJOR', 'CHIN'] as const;
 export type Carrier = (typeof CARRIERS)[number];
 
 export type Transport = 'avia' | 'avto';

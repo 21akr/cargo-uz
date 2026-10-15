@@ -72,7 +72,7 @@ MTProto creds (ingest stays disabled) — so you can bring pieces up incremental
 2. Log in **a dedicated user account** once to mint a `StringSession`; put it in
    `TG_SESSION`. **That string is full account access — keep it secret** (it's
    gitignored via `*.session` / `.env`).
-3. Set `INGEST_CHANNELS=WIN=@win_channel,MEEST=@...` (carrier=channel pairs).
+3. Set `INGEST_CHANNELS=WIN=@win_channel,CHIN=@...` (carrier=channel pairs).
 4. Restart — you'll see `Listening: WIN -> @win_channel` per channel.
 
 ## Deploy split
